@@ -43,6 +43,7 @@ const JUMP_VEL = 12.5;
 const RESPAWN_SECONDS = 3;
 const BODY_RADIUS = 0.6;
 const UP = new THREE.Vector3(0, 1, 0);
+const DOWN = new THREE.Vector3(0, -1, 0);
 
 interface BotBrain {
   targetId: string | null;
@@ -99,6 +100,8 @@ interface Fighter {
   deaths: number;
   lastHitAt: number;
   castAnim: number;
+  /** punch shoots from the hands; upper swings both arms up */
+  castPose: 'punch' | 'upper';
   walkPhase: number;
   vis: FighterVisual;
   netPos: THREE.Vector3;
@@ -157,7 +160,7 @@ interface Strike {
   effect?: Effect;
   color: number;
   obj: THREE.Group;
-  faller: THREE.Mesh | null;
+  faller: THREE.Object3D | null;
 }
 
 interface Fx {
@@ -187,7 +190,7 @@ export class Game {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(65, 1, 0.1, 1500);
   readonly arena: Arena;
-  readonly particles = new Particles(6000);
+  readonly particles = new Particles(10000);
 
   fighters = new Map<string, Fighter>();
   private projectiles: Projectile[] = [];
@@ -399,6 +402,7 @@ export class Game {
       deaths: 0,
       lastHitAt: -10,
       castAnim: 0,
+      castPose: 'punch',
       walkPhase: Math.random() * 10,
       vis,
       netPos: spawn.clone(),
@@ -633,12 +637,14 @@ export class Game {
   }
 
   private executeCast(f: Fighter, idx: number, o: THREE.Vector3, d: THREE.Vector3, dist: number) {
+    void o;
     const ab = f.def.abilities[idx];
     if (!ab) return;
     const color = ab.color ?? f.def.color;
     const auth = this.isAuth(f);
     if (Math.hypot(d.x, d.z) > 0.01) f.yaw = Math.atan2(d.x, d.z);
     f.castAnim = 1;
+    f.castPose = 'punch';
     const now = this.now;
     const flat = new THREE.Vector3(d.x, 0, d.z);
     if (flat.lengthSq() < 1e-4) flat.set(Math.sin(f.yaw), 0, Math.cos(f.yaw));
@@ -649,25 +655,28 @@ export class Game {
         const n = ab.count ?? 1;
         const spread = ab.spread ?? 0;
         const base = ab.backward ? flat.clone().negate() : d.clone();
+        this.fromHands(f, base, color);
         for (let i = 0; i < n; i++) {
           let ang = 0;
           if (spread >= 6) ang = (i / n) * Math.PI * 2;
           else if (n > 1) ang = -spread / 2 + (spread * i) / (n - 1);
           const dir = (spread >= 6 ? flat.clone() : base.clone()).applyAxisAngle(UP, ang).normalize();
-          this.spawnProjectile(f, ab, o.clone().addScaledVector(dir, 0.8), dir, color);
+          const hand = this.handPos(f, i % 2 === 0 ? 1 : -1);
+          this.spawnProjectile(f, ab, hand.addScaledVector(dir, 0.45), dir, color);
         }
-        this.particles.emit(o, { count: 10, color, speed: 5, life: 0.3, size: 0.5 });
         break;
       }
       case 'beam': {
         const range = ab.range ?? 40;
-        const end = o.clone().addScaledVector(d, range);
+        const hand = this.handPos(f, 1);
+        const end = hand.clone().addScaledVector(d, range);
         const width = ab.size ?? 0.5;
-        this.beamFx(o, end, width, color);
+        this.fromHands(f, d, color);
+        this.beamFx(hand, end, width, color);
         const struck: Fighter[] = [];
         for (const t of this.enemies(f)) {
-          if (segPointDist(o, end, center(t)) < width + 0.9) {
-            this.hit(t, f.id, ab.damage ?? 0, ab.effect, o, color, ab.steal ?? 0);
+          if (segPointDist(hand, end, center(t)) < width + 0.9) {
+            this.hit(t, f.id, ab.damage ?? 0, ab.effect, hand, color, ab.steal ?? 0);
             struck.push(t);
           }
         }
@@ -678,10 +687,12 @@ export class Game {
         const range = ab.range ?? 9;
         const arc = ab.spread ?? 1;
         const steps = 7;
+        this.fromHands(f, flat, color);
         for (let i = 0; i < steps; i++) {
           const ang = -arc / 2 + (arc * i) / (steps - 1);
           const dir = flat.clone().applyAxisAngle(UP, ang);
-          this.beamFx(o, o.clone().addScaledVector(dir, range * 0.85), 0.22, color);
+          const hand = this.handPos(f, i % 2 === 0 ? 1 : -1);
+          this.beamFx(hand, hand.clone().addScaledVector(dir, range * 0.85), 0.22, color);
         }
         for (const t of this.enemies(f)) {
           const to = t.pos.clone().sub(f.pos);
@@ -696,6 +707,13 @@ export class Game {
       case 'nova': {
         const r = ab.radius ?? 6;
         const at = f.pos.clone().add(new THREE.Vector3(0, 0.3, 0));
+        if (ab.effect?.lift) {
+          f.castPose = 'upper';
+          f.castAnim = 1.2;
+          this.fromGround(f.pos, color, f.def.accent, Math.min(9, 4 + r * 0.2));
+        } else {
+          this.fromHands(f, flat, color);
+        }
         this.novaFx(at, r, color);
         for (const t of this.enemies(f)) {
           if (t.pos.distanceTo(f.pos) < r) this.hit(t, f.id, ab.damage ?? 0, ab.effect, f.pos, color, ab.steal ?? 0);
@@ -724,20 +742,22 @@ export class Game {
         f.dashAbility = ab;
         f.dashHit.clear();
         f.trailTick = 0;
-        this.particles.emit(f.pos.clone().setY(f.pos.y + 1), { count: 25, color, speed: 6, life: 0.5, size: 0.7 });
+        this.fromHands(f, flat, color);
         break;
       }
       case 'leap': {
+        f.castPose = 'upper';
+        f.castAnim = 1.2;
+        if (ab.slam !== false) {
+          f.slamIdx = idx;
+          f.slamArmedAt = now + 0.2;
+        }
         if (auth) {
           f.vel.y = ab.lift ?? 18;
           f.onGround = false;
           f.kb.addScaledVector(flat, (ab.speed ?? 10) * 1.6);
-          if (ab.slam !== false) {
-            f.slamIdx = idx;
-            f.slamArmedAt = now + 0.2;
-          }
         }
-        this.particles.emit(f.pos.clone(), { count: 40, color, speed: 9, life: 0.6, size: 0.8, up: 0.6 });
+        this.fromGround(f.pos, color, f.def.accent, 7);
         break;
       }
       case 'shield':
@@ -769,6 +789,13 @@ export class Game {
       case 'zone': {
         const p = this.placePoint(f, flat, dist, ab.range ?? 0);
         this.spawnZone(f, ab, p, color);
+        if (ab.effect?.lift) {
+          f.castPose = 'upper';
+          f.castAnim = 1.2;
+          this.fromGround(p, color, f.def.accent, 6);
+        } else {
+          this.fromHands(f, flat, color);
+        }
         break;
       }
       case 'strike': {
@@ -792,12 +819,17 @@ export class Game {
   private doSlam(f: Fighter, idx: number, at: THREE.Vector3) {
     const ab = f.def.abilities[idx];
     if (!ab) return;
+    f.slamIdx = -1;
     const color = ab.color ?? f.def.color;
     const r = ab.radius ?? 5;
     this.novaFx(at.clone().setY(at.y + 0.2), r, color);
-    this.particles.emit(at, { count: 60, color: 0xd8d0c0, speed: 10, life: 0.7, size: 0.9, up: 0.5 });
+    this.fromAbove(at, color, f.def.accent);
+    this.particles.emit(at, { count: 40, color: 0xd8d0c0, speed: 10, life: 0.7, size: 0.9, up: 0.5 });
     for (const t of this.enemies(f)) {
-      if (t.pos.distanceTo(at) < r) this.hit(t, f.id, ab.damage ?? 0, ab.effect, at, color);
+      if (t.pos.distanceTo(at) < r) {
+        this.fromAbove(center(t), color, f.def.accent);
+        this.hit(t, f.id, ab.damage ?? 0, ab.effect, at, color);
+      }
     }
   }
 
@@ -916,6 +948,109 @@ export class Game {
     this.onEnd?.(this.scoreboard());
   }
 
+  // ---------- elemental gestures ----------
+
+  /** Right hand is side 1. Local +Z is the direction the fighter faces. */
+  private handPos(f: Fighter, side: number): THREE.Vector3 {
+    const c = Math.cos(f.yaw);
+    const s = Math.sin(f.yaw);
+    const lx = side * 0.9;
+    const lz = 0.5;
+    return new THREE.Vector3(f.pos.x + lx * c + lz * s, f.pos.y + 1.05, f.pos.z - lx * s + lz * c);
+  }
+
+  private jetStyle(id: string): { len: number; rad: number; speed: number; grav: number } {
+    switch (id) {
+      case 'frost':
+        return { len: 2.5, rad: 0.16, speed: 18, grav: 8 };
+      case 'blaze':
+        return { len: 2.8, rad: 0.4, speed: 13, grav: 2 };
+      case 'verdant':
+        return { len: 3.3, rad: 0.13, speed: 24, grav: 0 };
+      case 'tide':
+        return { len: 2.6, rad: 0.34, speed: 15, grav: 10 };
+      case 'turbo':
+        return { len: 2.1, rad: 0.2, speed: 20, grav: 5 };
+      case 'gale':
+        return { len: 3.6, rad: 0.15, speed: 22, grav: 0 };
+      default:
+        return { len: 2.4, rad: 0.22, speed: 16, grav: 4 };
+    }
+  }
+
+  /** A short blast of element, base at origin, tip along dir. */
+  private jetMesh(origin: THREE.Vector3, dir: THREE.Vector3, length: number, radius: number, color: number, life: number) {
+    const d = dir.clone();
+    if (d.lengthSq() < 1e-6) return;
+    d.normalize();
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.88, depthWrite: false });
+    const mesh = new THREE.Mesh(new THREE.ConeGeometry(radius, length, 10), mat);
+    mesh.quaternion.setFromUnitVectors(UP, d);
+    mesh.position.copy(origin).addScaledVector(d, length / 2);
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, depthWrite: false });
+    const core = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.38, length * 0.9, 8), coreMat);
+    mesh.add(core);
+    this.addFx(mesh, life, (k) => {
+      const s = 1 - k * 0.4;
+      mesh.scale.set(s, 1, s);
+      mat.opacity = 0.88 * (1 - k);
+      coreMat.opacity = 0.75 * (1 - k);
+    });
+  }
+
+  /** Element streams forward out of both hands. */
+  private fromHands(f: Fighter, dir: THREE.Vector3, color: number) {
+    const d = dir.clone();
+    d.y = THREE.MathUtils.clamp(d.y, -0.2, 0.45);
+    if (d.lengthSq() < 1e-6) d.set(Math.sin(f.yaw), 0, Math.cos(f.yaw));
+    d.normalize();
+    const style = this.jetStyle(f.charId);
+    for (const side of [1, -1]) {
+      const hand = this.handPos(f, side);
+      this.particles.emit(hand, {
+        count: 14,
+        color,
+        speed: style.speed,
+        life: 0.4,
+        size: 0.65,
+        spread: 0.16,
+        dir: d,
+        gravity: style.grav,
+      });
+      this.particles.emit(hand, {
+        count: 8,
+        color: f.def.accent,
+        speed: style.speed * 1.15,
+        life: 0.28,
+        size: 0.4,
+        spread: 0.1,
+        dir: d,
+        gravity: style.grav * 0.4,
+      });
+      this.jetMesh(hand, d, style.len, style.rad, color, 0.28);
+    }
+  }
+
+  /** Uppercut: a column of element shooting up out of the ground. */
+  private fromGround(at: THREE.Vector3, color: number, accent: number, height = 6.5) {
+    const y = groundAt(this.arena, at.x, at.z, at.y + 4);
+    const origin = new THREE.Vector3(at.x, y + 0.05, at.z);
+    this.particles.emit(origin, { count: 30, color, speed: 16, life: 0.6, size: 0.8, spread: 0.28, dir: UP, gravity: 7 });
+    this.particles.emit(origin, { count: 14, color: accent, speed: 20, life: 0.42, size: 0.48, spread: 0.16, dir: UP, gravity: 5 });
+    this.particles.emit(origin, { count: 16, color, speed: 6, life: 0.45, size: 0.65, up: 0.4, spread: 1.2, gravity: 14 });
+    this.jetMesh(origin, UP, height, 1.05, color, 0.42);
+    this.jetMesh(origin, UP, height * 0.62, 0.4, accent, 0.34);
+  }
+
+  /** Down attack: element falls onto a spot or a fighter. */
+  private fromAbove(at: THREE.Vector3, color: number, accent: number) {
+    const top = at.clone();
+    top.y += 6.4;
+    this.particles.emit(top, { count: 24, color, speed: 18, life: 0.45, size: 0.75, spread: 0.35, dir: DOWN, gravity: 26 });
+    this.particles.emit(top, { count: 12, color: accent, speed: 22, life: 0.36, size: 0.45, spread: 0.2, dir: DOWN, gravity: 28 });
+    this.jetMesh(top, DOWN, 6.4, 0.75, color, 0.34);
+  }
+
   // ---------- spawners & fx ----------
 
   private spawnProjectile(f: Fighter, ab: Ability, pos: THREE.Vector3, dir: THREE.Vector3, color: number) {
@@ -1010,17 +1145,24 @@ export class Game {
     fill.name = 'fill';
     g.add(fill);
     this.scene.add(g);
-    let faller: THREE.Mesh | null = null;
+    let faller: THREE.Object3D | null = null;
     if (!ab.effect?.lift) {
-      faller = new THREE.Mesh(
-        f.def.id === 'frost' ? new THREE.ConeGeometry(r * 0.35, r * 1.2, 6) : new THREE.SphereGeometry(r * 0.3, 16, 12),
-        new THREE.MeshBasicMaterial({ color }),
-      );
-      const outline = new THREE.Mesh(faller.geometry, OUTLINE_MAT);
-      outline.scale.setScalar(1.12);
-      faller.add(outline);
-      if (f.def.id === 'frost') faller.rotation.x = Math.PI;
-      this.scene.add(faller);
+      const chunks = new THREE.Group();
+      const n = 5;
+      for (let i = 0; i < n; i++) {
+        const chunk = new THREE.Mesh(
+          new THREE.ConeGeometry(0.28 + (i % 3) * 0.08, 1.15 + (i % 2) * 0.45, 6),
+          this.mat(i % 2 ? color : f.def.accent),
+        );
+        chunk.rotation.x = Math.PI;
+        const ang = (i / n) * Math.PI * 2;
+        chunk.position.set(Math.cos(ang) * r * 0.32, (i - 2) * 0.8, Math.sin(ang) * r * 0.32);
+        chunks.add(chunk);
+      }
+      this.scene.add(chunks);
+      faller = chunks;
+    } else {
+      this.fromGround(p, color, f.def.accent, 5);
     }
     const delay = ab.delay ?? 1;
     this.strikes.push({ owner: f.id, pos: p, radius: r, damage: ab.damage ?? 0, at: this.now + delay, start: this.now, effect: ab.effect, color, obj: g, faller });
@@ -1291,7 +1433,17 @@ export class Game {
     for (const f of this.fighters.values()) {
       if (f.dashUntil <= now || !f.alive || !f.dashAbility) continue;
       const ab = f.dashAbility;
-      this.particles.emit(center(f), { count: 3, color: f.def.color, speed: 2, life: 0.4, size: 0.8 });
+      for (const side of [1, -1]) {
+        this.particles.emit(this.handPos(f, side), {
+          count: 2,
+          color: f.def.color,
+          dir: f.dashDir,
+          speed: 9,
+          life: 0.25,
+          size: 0.5,
+          spread: 0.14,
+        });
+      }
       if (!ab.damage && !ab.effect) continue;
       for (const t of this.enemies(f)) {
         if (f.dashHit.has(t.id)) continue;
@@ -1502,7 +1654,34 @@ export class Game {
       const k = Math.min(1, (now - s.start) / Math.max(0.01, s.at - s.start));
       const fill = s.obj.getObjectByName('fill');
       if (fill) fill.scale.setScalar(Math.max(0.01, k));
-      if (s.faller) s.faller.position.set(s.pos.x, s.pos.y + 30 * (1 - k) + 1, s.pos.z);
+      if (s.faller) s.faller.position.set(s.pos.x, s.pos.y + 28 * (1 - k) + 1.2, s.pos.z);
+      const owner = this.fighters.get(s.owner);
+      const accent = owner?.def.accent ?? 0xffffff;
+      if (s.effect?.lift) {
+        this.particles.emit(new THREE.Vector3(s.pos.x, s.pos.y + 0.15, s.pos.z), {
+          count: 3,
+          color: s.color,
+          dir: UP,
+          speed: 12,
+          life: 0.35,
+          size: 0.55,
+          spread: 0.18,
+          gravity: 4,
+        });
+      } else {
+        const x = s.pos.x + (Math.random() - 0.5) * s.radius;
+        const z = s.pos.z + (Math.random() - 0.5) * s.radius;
+        this.particles.emit(new THREE.Vector3(x, s.pos.y + 16 * (1 - k) + 6, z), {
+          count: 2,
+          color: s.color,
+          dir: DOWN,
+          speed: 12,
+          life: 0.32,
+          size: 0.55,
+          spread: 0.1,
+          gravity: 26,
+        });
+      }
       if (now < s.at) {
         keep.push(s);
         continue;
@@ -1510,12 +1689,12 @@ export class Game {
       this.disposeObj(s.obj);
       if (s.faller) this.disposeObj(s.faller);
       this.novaFx(s.pos.clone().setY(s.pos.y + 0.3), s.radius, s.color);
-      if (s.effect?.lift) {
-        this.particles.emit(s.pos, { count: 120, color: s.color, speed: 14, life: 1, size: 0.9, up: 2.5, spread: 0.35, gravity: 18 });
-      }
+      if (s.effect?.lift) this.fromGround(s.pos, s.color, accent, 8);
+      else this.fromAbove(s.pos.clone().setY(s.pos.y + 1.2), s.color, accent);
       for (const t of this.fighters.values()) {
         if (!t.alive || t.id === s.owner) continue;
         if (Math.hypot(t.pos.x - s.pos.x, t.pos.z - s.pos.z) < s.radius && Math.abs(t.pos.y - s.pos.y) < s.radius) {
+          if (!s.effect?.lift) this.fromAbove(center(t), s.color, accent);
           this.hit(t, s.owner, s.damage, s.effect, s.pos, s.color);
         }
       }
@@ -1556,10 +1735,38 @@ export class Game {
       const amp = grounded ? Math.min(1, hs / 7) * 0.8 : 0;
       v.legL.rotation.x = grounded ? Math.sin(f.walkPhase) * amp : -0.6;
       v.legR.rotation.x = grounded ? -Math.sin(f.walkPhase) * amp : 0.3;
-      v.armL.rotation.x = -Math.sin(f.walkPhase) * amp * 0.8;
       f.castAnim = Math.max(0, f.castAnim - dt * 4);
-      v.armR.rotation.x = f.castAnim > 0 ? -1.6 * f.castAnim : Math.sin(f.walkPhase) * amp * 0.8;
-      v.body.rotation.x = f.dashUntil > now ? 0.4 : 0;
+      const dropping = f.slamIdx >= 0 && f.vel.y < -0.5;
+      if (dropping) {
+        v.armL.rotation.x = -2.45;
+        v.armR.rotation.x = -2.45;
+      } else if (f.castAnim > 0 && f.castPose === 'upper') {
+        const a = -2.7 * Math.min(1, f.castAnim);
+        v.armL.rotation.x = a;
+        v.armR.rotation.x = a;
+      } else if (f.castAnim > 0) {
+        v.armR.rotation.x = -1.7 * f.castAnim;
+        v.armL.rotation.x = -1.35 * f.castAnim;
+      } else {
+        v.armL.rotation.x = -Math.sin(f.walkPhase) * amp * 0.8;
+        v.armR.rotation.x = Math.sin(f.walkPhase) * amp * 0.8;
+      }
+      if (f.dashUntil > now) v.body.rotation.x = 0.55;
+      else if (dropping) v.body.rotation.x = 0.45;
+      else if (f.castPose === 'upper' && f.castAnim > 0) v.body.rotation.x = -0.28;
+      else v.body.rotation.x = 0;
+      if (dropping) {
+        this.particles.emit(new THREE.Vector3(f.pos.x, f.pos.y + 6, f.pos.z), {
+          count: 2,
+          color: f.def.color,
+          dir: DOWN,
+          speed: 16,
+          life: 0.28,
+          size: 0.5,
+          spread: 0.25,
+          gravity: 24,
+        });
+      }
       v.aura.rotation.y += dt * 2;
       v.shield.visible = shielded;
       if (shielded) v.shield.rotation.y += dt;

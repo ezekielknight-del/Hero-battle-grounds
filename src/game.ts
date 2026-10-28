@@ -75,6 +75,13 @@ interface Fighter {
   stunUntil: number;
   shieldUntil: number;
   shieldMult: number;
+  thornsUntil: number;
+  thornsEffect?: Effect;
+  regen: number;
+  auraUntil: number;
+  auraEffect?: Effect;
+  auraTick: number;
+  trailTick: number;
   hasteUntil: number;
   hasteMult: number;
   burnUntil: number;
@@ -115,6 +122,14 @@ interface Projectile {
   color: number;
   mesh: THREE.Mesh;
   hit: Set<string>;
+  explode: number;
+  steal: number;
+  hook: boolean;
+  bounce: number;
+  boomerang: boolean;
+  returning: boolean;
+  travel: number;
+  out: number;
 }
 
 interface Zone {
@@ -127,6 +142,9 @@ interface Zone {
   effect?: Effect;
   color: number;
   obj: THREE.Group;
+  follow: boolean;
+  mine: boolean;
+  healOwner: number;
 }
 
 interface Strike {
@@ -359,6 +377,11 @@ export class Game {
       stunUntil: 0,
       shieldUntil: 0,
       shieldMult: 1,
+      thornsUntil: 0,
+      regen: 0,
+      auraUntil: 0,
+      auraTick: 0,
+      trailTick: 0,
       hasteUntil: 0,
       hasteMult: 1,
       burnUntil: 0,
@@ -428,6 +451,9 @@ export class Game {
     f.cds = def.abilities.map(() => this.now + 1);
     f.dashUntil = 0;
     f.slamIdx = -1;
+    f.thornsUntil = 0;
+    f.regen = 0;
+    f.auraUntil = 0;
     if (f.alive) this.particles.emit(center(f), { count: 50, color: def.color, speed: 8, life: 0.8, size: 0.7 });
   }
 
@@ -622,11 +648,12 @@ export class Game {
       case 'projectile': {
         const n = ab.count ?? 1;
         const spread = ab.spread ?? 0;
+        const base = ab.backward ? flat.clone().negate() : d.clone();
         for (let i = 0; i < n; i++) {
           let ang = 0;
           if (spread >= 6) ang = (i / n) * Math.PI * 2;
           else if (n > 1) ang = -spread / 2 + (spread * i) / (n - 1);
-          const dir = (spread >= 6 ? flat.clone() : d.clone()).applyAxisAngle(UP, ang).normalize();
+          const dir = (spread >= 6 ? flat.clone() : base.clone()).applyAxisAngle(UP, ang).normalize();
           this.spawnProjectile(f, ab, o.clone().addScaledVector(dir, 0.8), dir, color);
         }
         this.particles.emit(o, { count: 10, color, speed: 5, life: 0.3, size: 0.5 });
@@ -637,8 +664,32 @@ export class Game {
         const end = o.clone().addScaledVector(d, range);
         const width = ab.size ?? 0.5;
         this.beamFx(o, end, width, color);
+        const struck: Fighter[] = [];
         for (const t of this.enemies(f)) {
-          if (segPointDist(o, end, center(t)) < width + 0.9) this.hit(t, f.id, ab.damage ?? 0, ab.effect, o, color);
+          if (segPointDist(o, end, center(t)) < width + 0.9) {
+            this.hit(t, f.id, ab.damage ?? 0, ab.effect, o, color, ab.steal ?? 0);
+            struck.push(t);
+          }
+        }
+        this.chainFrom(f, ab, struck, color);
+        break;
+      }
+      case 'cone': {
+        const range = ab.range ?? 9;
+        const arc = ab.spread ?? 1;
+        const steps = 7;
+        for (let i = 0; i < steps; i++) {
+          const ang = -arc / 2 + (arc * i) / (steps - 1);
+          const dir = flat.clone().applyAxisAngle(UP, ang);
+          this.beamFx(o, o.clone().addScaledVector(dir, range * 0.85), 0.22, color);
+        }
+        for (const t of this.enemies(f)) {
+          const to = t.pos.clone().sub(f.pos);
+          to.y = 0;
+          const distE = to.length();
+          if (distE > range || distE < 0.2) continue;
+          const ang = Math.acos(THREE.MathUtils.clamp(to.normalize().dot(flat), -1, 1));
+          if (ang <= arc / 2) this.hit(t, f.id, ab.damage ?? 0, ab.effect, f.pos, color, ab.steal ?? 0);
         }
         break;
       }
@@ -647,16 +698,32 @@ export class Game {
         const at = f.pos.clone().add(new THREE.Vector3(0, 0.3, 0));
         this.novaFx(at, r, color);
         for (const t of this.enemies(f)) {
-          if (t.pos.distanceTo(f.pos) < r) this.hit(t, f.id, ab.damage ?? 0, ab.effect, f.pos, color);
+          if (t.pos.distanceTo(f.pos) < r) this.hit(t, f.id, ab.damage ?? 0, ab.effect, f.pos, color, ab.steal ?? 0);
         }
         break;
       }
       case 'dash': {
+        if (ab.blink) {
+          const dest = f.pos.clone().addScaledVector(flat, ab.range ?? 14);
+          dest.y = 0;
+          const rr = Math.hypot(dest.x, dest.z);
+          const max = this.arena.radius - 1.2;
+          if (rr > max) dest.multiplyScalar(max / rr);
+          dest.y = groundAt(this.arena, dest.x, dest.z);
+          this.particles.emit(center(f), { count: 30, color, speed: 7, life: 0.45, size: 0.6 });
+          if (auth) {
+            f.pos.copy(dest);
+            f.vel.set(0, f.vel.y, 0);
+          }
+          this.particles.emit(dest.clone().setY(dest.y + 1), { count: 30, color, speed: 7, life: 0.45, size: 0.6 });
+          break;
+        }
         f.dashDir.copy(flat);
         f.dashSpeed = ab.speed ?? 60;
         f.dashUntil = now + (ab.range ?? 15) / f.dashSpeed;
         f.dashAbility = ab;
         f.dashHit.clear();
+        f.trailTick = 0;
         this.particles.emit(f.pos.clone().setY(f.pos.y + 1), { count: 25, color, speed: 6, life: 0.5, size: 0.7 });
         break;
       }
@@ -665,8 +732,10 @@ export class Game {
           f.vel.y = ab.lift ?? 18;
           f.onGround = false;
           f.kb.addScaledVector(flat, (ab.speed ?? 10) * 1.6);
-          f.slamIdx = idx;
-          f.slamArmedAt = now + 0.2;
+          if (ab.slam !== false) {
+            f.slamIdx = idx;
+            f.slamArmedAt = now + 0.2;
+          }
         }
         this.particles.emit(f.pos.clone(), { count: 40, color, speed: 9, life: 0.6, size: 0.8, up: 0.6 });
         break;
@@ -674,6 +743,13 @@ export class Game {
       case 'shield':
         f.shieldUntil = now + (ab.duration ?? 3);
         f.shieldMult = ab.mult ?? 0.5;
+        f.thornsUntil = ab.thorns ? f.shieldUntil : 0;
+        f.thornsEffect = ab.thorns;
+        f.regen = ab.regen ?? 0;
+        if (ab.boost) {
+          f.hasteUntil = f.shieldUntil;
+          f.hasteMult = ab.boost;
+        }
         this.particles.emit(center(f), { count: 30, color, speed: 6, life: 0.6, size: 0.6 });
         break;
       case 'heal':
@@ -683,6 +759,11 @@ export class Game {
       case 'haste':
         f.hasteUntil = now + (ab.duration ?? 3);
         f.hasteMult = ab.mult ?? 1.5;
+        if (ab.aura) {
+          f.auraUntil = f.hasteUntil;
+          f.auraEffect = ab.aura;
+          f.auraTick = now;
+        }
         this.particles.emit(f.pos.clone(), { count: 30, color, speed: 7, life: 0.5, size: 0.6 });
         break;
       case 'zone': {
@@ -720,13 +801,46 @@ export class Game {
     }
   }
 
-  private hit(t: Fighter, ownerId: string, dmg: number, e: Effect | undefined, src: THREE.Vector3, color: number) {
+  private chainFrom(f: Fighter, ab: Ability, struck: Fighter[], color: number) {
+    const jumps = ab.chain ?? 0;
+    if (!jumps || struck.length === 0) return;
+    const seen = new Set(struck.map((t) => t.id));
+    for (const first of struck) {
+      let from = first;
+      for (let n = 0; n < jumps; n++) {
+        let next: Fighter | null = null;
+        let best = 16;
+        for (const t of this.enemies(f)) {
+          if (seen.has(t.id)) continue;
+          const d = t.pos.distanceTo(from.pos);
+          if (d < best) {
+            best = d;
+            next = t;
+          }
+        }
+        if (!next) break;
+        seen.add(next.id);
+        this.beamFx(center(from), center(next), 0.28, color);
+        this.hit(next, f.id, (ab.damage ?? 0) * 0.7, ab.effect, from.pos, color, ab.steal ?? 0);
+        from = next;
+      }
+    }
+  }
+
+  private hit(t: Fighter, ownerId: string, dmg: number, e: Effect | undefined, src: THREE.Vector3, color: number, steal = 0) {
     if (!t.alive || t.id === ownerId) return;
     this.particles.emit(center(t), { count: 14, color, speed: 7, life: 0.45, size: 0.55 });
-    if (ownerId === this.localId) this.onHit?.();
-    if (!this.isAuth(t)) return;
+    if (ownerId === this.localId && dmg > 0) this.onHit?.();
+    const attacker = this.fighters.get(ownerId);
+    if (!this.isAuth(t)) {
+      if (dmg > 0 && t.thornsUntil > this.now && t.thornsEffect && attacker && this.isAuth(attacker)) {
+        this.hit(attacker, t.id, 0, t.thornsEffect, t.pos, t.def.color);
+      }
+      return;
+    }
     const now = this.now;
     if (t.protectUntil > now) return;
+    const chilled = t.slowUntil > now;
     if (e) {
       if (e.slow) {
         t.slowMult = t.slowUntil > now ? Math.min(t.slowMult, e.slow) : e.slow;
@@ -752,14 +866,22 @@ export class Game {
         t.vel.y = Math.max(t.vel.y, e.lift);
         t.onGround = false;
       }
+      if (e.vsSlow && chilled) dmg *= e.vsSlow;
     }
-    this.applyDamage(t, dmg, ownerId);
+    const dealt = this.applyDamage(t, dmg, ownerId);
+    if (steal > 0 && dealt > 0 && attacker && this.isAuth(attacker)) {
+      attacker.hp = Math.min(attacker.def.hp, attacker.hp + dealt * steal);
+      this.particles.emit(center(attacker), { count: 6, color: 0x6dff9d, speed: 2, life: 0.4, size: 0.45, up: 1 });
+    }
+    if (dealt > 0 && t.thornsUntil > now && t.thornsEffect && attacker && this.isAuth(attacker)) {
+      this.hit(attacker, t.id, 0, t.thornsEffect, t.pos, t.def.color);
+    }
   }
 
-  private applyDamage(t: Fighter, dmg: number, by: string | null) {
-    if (!t.alive || dmg <= 0) return;
+  private applyDamage(t: Fighter, dmg: number, by: string | null): number {
+    if (!t.alive || dmg <= 0) return 0;
     const now = this.now;
-    if (t.protectUntil > now) return;
+    if (t.protectUntil > now) return 0;
     if (t.shieldUntil > now) dmg *= t.shieldMult;
     t.hp -= dmg;
     t.lastHitAt = now;
@@ -770,6 +892,7 @@ export class Game {
       this.registerKill(t, by);
       this.net?.sendDied(t.id, by);
     }
+    return dmg;
   }
 
   private registerKill(victim: Fighter, by: string | null) {
@@ -817,6 +940,14 @@ export class Game {
       color,
       mesh,
       hit: new Set(),
+      explode: ab.explode ?? 0,
+      steal: ab.steal ?? 0,
+      hook: !!ab.hook,
+      bounce: ab.bounce ?? 0,
+      boomerang: !!ab.boomerang,
+      returning: false,
+      travel: 0,
+      out: (ab.range ?? 40) * 0.55,
     });
   }
 
@@ -829,6 +960,7 @@ export class Game {
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }),
     );
     disc.rotation.x = -Math.PI / 2;
+    if (ab.mine) (disc.material as THREE.MeshBasicMaterial).opacity = 0.08;
     g.add(disc);
     const edge = new THREE.Mesh(
       new THREE.RingGeometry(r - 0.25, r, 64),
@@ -854,6 +986,9 @@ export class Game {
       effect: ab.effect,
       color,
       obj: g,
+      follow: !!ab.follow,
+      mine: !!ab.mine,
+      healOwner: ab.healOwner ?? 0,
     });
   }
 
@@ -982,6 +1117,14 @@ export class Game {
         }
         if (this.simulate(f, move, jump, dt) && f.kind === 'local') this.jumpBufferedUntil = 0;
         if (f.burnUntil > now) this.applyDamage(f, f.burnDps * dt, f.burnBy);
+        if (f.shieldUntil > now && f.regen > 0) f.hp = Math.min(f.def.hp, f.hp + f.regen * dt);
+        if (f.shieldUntil <= now) f.regen = 0;
+        if (f.auraUntil > now && f.auraEffect && now >= f.auraTick) {
+          f.auraTick = now + 0.45;
+          for (const t of this.enemies(f)) {
+            if (t.pos.distanceTo(f.pos) < 2.3) this.hit(t, f.id, f.auraEffect.burn ?? 4, f.auraEffect, f.pos, f.def.color);
+          }
+        }
       } else if (f.hasNet) {
         const lead = Math.min(0.15, now - f.netAt);
         tmp.copy(f.netPos).addScaledVector(f.netVel, lead);
@@ -1035,7 +1178,8 @@ export class Game {
     f.kb.set(0, 0, 0);
     f.hp = f.def.hp;
     f.alive = true;
-    f.slowUntil = f.stunUntil = f.burnUntil = f.hasteUntil = f.shieldUntil = f.dashUntil = 0;
+    f.slowUntil = f.stunUntil = f.burnUntil = f.hasteUntil = f.shieldUntil = f.dashUntil = f.thornsUntil = f.auraUntil = 0;
+    f.regen = 0;
     f.slamIdx = -1;
     f.protectUntil = this.now + 1.5;
     if (f.kind === 'local') this.camYaw = Math.atan2(-best.x, -best.z);
@@ -1153,8 +1297,12 @@ export class Game {
         if (f.dashHit.has(t.id)) continue;
         if (t.pos.distanceTo(f.pos) < 1.9) {
           f.dashHit.add(t.id);
-          this.hit(t, f.id, ab.damage ?? 0, ab.effect, f.pos, f.def.color);
+          this.hit(t, f.id, ab.damage ?? 0, ab.effect, f.pos, f.def.color, ab.steal ?? 0);
         }
+      }
+      if (ab.trail && now > f.trailTick) {
+        f.trailTick = now + 0.2;
+        this.spawnZone(f, { ...ab, radius: 2.3, damage: 5, duration: 1.5, follow: false, mine: false, healOwner: 0 }, f.pos.clone(), f.def.color);
       }
     }
   }
@@ -1163,7 +1311,29 @@ export class Game {
     const keep: Projectile[] = [];
     for (const p of this.projectiles) {
       let dead = false;
-      if (p.homing) {
+      let quiet = false;
+      if (p.boomerang && !p.returning && p.travel >= p.out) {
+        p.returning = true;
+        p.hit.clear();
+        p.left = p.out + 40;
+      }
+      if (p.returning) {
+        const owner = this.fighters.get(p.owner);
+        if (!owner || !owner.alive) {
+          dead = true;
+          quiet = true;
+        } else {
+          const want = center(owner).sub(p.pos);
+          const distO = want.length();
+          if (distO < 1.3) {
+            dead = true;
+            quiet = true;
+          } else {
+            const speed = Math.max(20, p.vel.length());
+            p.vel.copy(want.normalize().multiplyScalar(speed));
+          }
+        }
+      } else if (p.homing) {
         let best: Fighter | null = null;
         let bd = 35;
         for (const t of this.fighters.values()) {
@@ -1182,6 +1352,7 @@ export class Game {
       }
       const step = p.vel.length() * dt;
       p.pos.addScaledVector(p.vel, dt);
+      p.travel += step;
       p.left -= step;
       if (p.left <= 0 || p.pos.y < 0.05) dead = true;
       if (!dead && Math.hypot(p.pos.x, p.pos.z) > this.arena.radius) dead = true;
@@ -1200,8 +1371,28 @@ export class Game {
           const b = new THREE.Vector3(t.pos.x, t.pos.y + 2.4, t.pos.z);
           if (segPointDist(a, b, p.pos) < p.size + BODY_RADIUS) {
             p.hit.add(t.id);
-            this.hit(t, p.owner, p.damage, p.effect, p.pos.clone().sub(p.vel.clone().setLength(1)), p.color);
-            if (!p.pierce) {
+            const owner = this.fighters.get(p.owner);
+            const effect = p.hook ? { ...p.effect, pull: true, knock: Math.max(p.effect?.knock ?? 0, 38) } : p.effect;
+            const src = p.hook && owner ? owner.pos : p.pos.clone().sub(p.vel.clone().setLength(1));
+            this.hit(t, p.owner, p.damage, effect, src, p.color, p.steal);
+            if (p.bounce > 0) {
+              let next: Fighter | null = null;
+              let bestD = 22;
+              for (const o of this.fighters.values()) {
+                if (!o.alive || o.id === p.owner || p.hit.has(o.id)) continue;
+                const dd = o.pos.distanceTo(p.pos);
+                if (dd < bestD) {
+                  bestD = dd;
+                  next = o;
+                }
+              }
+              if (next) {
+                const speed = Math.max(16, p.vel.length());
+                p.vel.copy(center(next).sub(p.pos).normalize().multiplyScalar(speed));
+                p.bounce -= 1;
+                p.left = Math.max(p.left, 16);
+              } else dead = true;
+            } else if (!p.pierce) {
               dead = true;
               break;
             }
@@ -1209,6 +1400,13 @@ export class Game {
         }
       }
       if (dead) {
+        if (!quiet && p.explode > 0) {
+          this.novaFx(p.pos, p.explode, p.color);
+          for (const t of this.fighters.values()) {
+            if (!t.alive || t.id === p.owner || p.hit.has(t.id)) continue;
+            if (t.pos.distanceTo(p.pos) < p.explode + 0.4) this.hit(t, p.owner, p.damage * 0.65, p.effect, p.pos, p.color, p.steal);
+          }
+        }
         this.particles.emit(p.pos, { count: 8, color: p.color, speed: 4, life: 0.35, size: p.size + 0.2 });
         this.scene.remove(p.mesh);
       } else {
@@ -1228,6 +1426,13 @@ export class Game {
         this.disposeObj(z.obj);
         continue;
       }
+      if (z.follow) {
+        const owner = this.fighters.get(z.owner);
+        if (owner && owner.alive) {
+          z.pos.set(owner.pos.x, groundAt(this.arena, owner.pos.x, owner.pos.z, owner.pos.y + 0.4), owner.pos.z);
+          z.obj.position.set(z.pos.x, z.pos.y + 0.05, z.pos.z);
+        }
+      }
       const swirl = z.obj.getObjectByName('swirl');
       if (swirl) swirl.rotation.z += dt * (z.effect?.pull ? -4 : 2);
       const life = z.until - now;
@@ -1245,6 +1450,21 @@ export class Game {
       });
       const tick = now >= z.nextTick;
       if (tick) z.nextTick = now + 0.5;
+      if (z.mine) {
+        let tripped = false;
+        for (const t of this.fighters.values()) {
+          if (!t.alive || t.id === z.owner) continue;
+          if (Math.hypot(t.pos.x - z.pos.x, t.pos.z - z.pos.z) <= z.radius && Math.abs(t.pos.y - z.pos.y) < 4) {
+            tripped = true;
+            this.hit(t, z.owner, z.dps, z.effect, z.pos, z.color);
+          }
+        }
+        if (tripped) {
+          this.novaFx(z.pos.clone().setY(z.pos.y + 0.2), z.radius, z.color);
+          this.disposeObj(z.obj);
+        } else keep.push(z);
+        continue;
+      }
       for (const t of this.fighters.values()) {
         if (!t.alive || t.id === z.owner) continue;
         const dx = z.pos.x - t.pos.x;
@@ -1261,6 +1481,13 @@ export class Game {
         if (tick) {
           const e = z.effect ? { slow: z.effect.slow, slowDur: z.effect.slowDur, stun: z.effect.stun, burn: z.effect.burn, burnDur: z.effect.burnDur } : undefined;
           this.hit(t, z.owner, z.dps * 0.5, e, z.pos, z.color);
+        }
+      }
+      if (z.healOwner && tick) {
+        const owner = this.fighters.get(z.owner);
+        if (owner?.alive && this.isAuth(owner) && Math.hypot(owner.pos.x - z.pos.x, owner.pos.z - z.pos.z) <= z.radius) {
+          owner.hp = Math.min(owner.def.hp, owner.hp + z.healOwner);
+          this.particles.emit(center(owner), { count: 4, color: 0x6dff9d, speed: 1.5, life: 0.4, size: 0.4, up: 1.2 });
         }
       }
       keep.push(z);
@@ -1404,12 +1631,15 @@ export class Game {
         return d < (ab.range ?? 40) * 0.85;
       case 'beam':
         return d < (ab.range ?? 40) * 0.9;
+      case 'cone':
+        return d < (ab.range ?? 9) + 1;
       case 'nova':
         return d < (ab.radius ?? 6) * 0.85;
       case 'dash':
         return ab.damage ? d < (ab.range ?? 15) + 2 && d > 3 : now - f.lastHitAt < 1 && Math.random() < 0.4;
       case 'leap':
-        return ab.damage ? d < (ab.radius ?? 5) + 5 : false;
+        if (ab.slam === false) return d < 8 || now - f.lastHitAt < 1.2;
+        return ab.damage ? d < (ab.radius ?? 5) + 8 : false;
       case 'shield':
         return now - f.lastHitAt < 1.2;
       case 'heal':

@@ -13,7 +13,7 @@ A 3D PVP arena brawler that runs in the browser. Six elemental fighters battle i
 | Turbo | Car powers | Screen-faced robot with a blaster arm. Tanky rammer |
 | Gale | Air | Wind-blown kid in a huge scarf, and an airbender |
 
-Each fighter has 9 powers on keys `1`–`9`. Power `9` is an ultimate with a long cooldown.
+Each fighter has 9 powers on keys `1`–`9`, and no two fighters share a power. Frost chills and then shatters chilled enemies. Blaze's shots explode and his fire follows him. Verdant heals by dealing damage and can teleport. Tide pushes, reels, and launches people. Turbo rams, lays mines, and bounces shots. Gale's blade comes back, and his wind throws everyone around. Power `9` is an ultimate with a long cooldown.
 
 ## Controls
 

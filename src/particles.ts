@@ -31,8 +31,9 @@ const FRAG = /* glsl */ `
     vec2 c = gl_PointCoord - 0.5;
     float d = length(c);
     if (d > 0.5) discard;
-    float a = smoothstep(0.5, 0.0, d);
-    gl_FragColor = vec4(vColor.rgb, vColor.a * a);
+    float a = smoothstep(0.5, 0.32, d);
+    vec3 rgb = mix(vColor.rgb, vColor.rgb * 0.55, smoothstep(0.25, 0.5, d));
+    gl_FragColor = vec4(rgb, vColor.a * a);
   }
 `;
 
@@ -72,7 +73,7 @@ export class Particles {
       uniforms: { uScale: { value: 400 } },
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
     });
     this.points = new THREE.Points(geo, this.material);
     this.points.frustumCulled = false;

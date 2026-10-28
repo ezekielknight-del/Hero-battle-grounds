@@ -1268,3 +1268,528 @@ body[data-screen='game'] .toast {
     display: none;
   }
 }
+
+/* =====================================================================
+   Brawl theme: chunky font, bold outlines, bright blue panels and
+   yellow action buttons.
+   ===================================================================== */
+
+:root {
+  --ink: #1a1426;
+  --panel: linear-gradient(180deg, #3f86ff 0%, #2a5fd8 100%);
+  --panel-dark: linear-gradient(180deg, #263c8c 0%, #1b2c6b 100%);
+  --line: rgba(26, 20, 38, 0.9);
+  --muted: #d7e5ff;
+  --accent: #ffd21f;
+  font-family: 'Lilita One', 'Trebuchet MS', system-ui, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.stroke,
+h1,
+h2,
+h3,
+.btn,
+.char-btn strong,
+.hud-timer strong,
+.respawn strong,
+.slot-name,
+.slot-txt,
+.winner p,
+.code {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 4px var(--ink);
+  color: #fff;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 400;
+}
+
+kbd {
+  background: #fff;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-bottom-width: 4px;
+  font-family: 'Lilita One', system-ui, sans-serif;
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
+/* panels */
+.menu-card,
+.showcase,
+.lobby-card,
+.end-card,
+.char-panel,
+.hud-player,
+.hud-score,
+.hud-timer,
+.killfeed li,
+.abilities,
+.char-btn,
+.lock-hint {
+  background: var(--panel);
+  border: 3px solid var(--ink);
+  box-shadow: 0 6px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.35);
+  backdrop-filter: none;
+  color: #fff;
+}
+
+.char-panel {
+  border-radius: 20px;
+  box-shadow: 0 8px 0 var(--ink), 0 20px 50px rgba(0, 0, 0, 0.35), inset 0 3px 0 rgba(255, 255, 255, 0.35);
+}
+
+.screen {
+  background: radial-gradient(ellipse at center, rgba(40, 90, 200, 0.05), rgba(20, 40, 110, 0.4));
+}
+
+.brand h1 {
+  background: none;
+  color: #ffd21f;
+  -webkit-text-fill-color: #ffd21f;
+  -webkit-text-stroke: 7px var(--ink);
+  text-shadow: 0 6px 0 var(--ink);
+  font-size: clamp(2.2rem, 5vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+}
+
+.brand p,
+.lobby-head p,
+.tagline,
+.panel-head p,
+.char-detail-head p {
+  color: var(--muted);
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+}
+
+.logo {
+  background: conic-gradient(from 210deg, #ff3b2f, #ffd21f, #3dff8b, #2f8bff, #7fdcff, #ffffff, #ff2d55, #ff3b2f);
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  mask: none;
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+/* buttons */
+.btn {
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #5fa2ff, #3a76f0);
+  box-shadow: 0 5px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.4);
+  font-weight: 400;
+  font-size: 1rem;
+  -webkit-text-stroke: 3px var(--ink);
+}
+
+.btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #74b0ff, #4a84f5);
+  border-color: var(--ink);
+  filter: none;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.4);
+}
+
+.btn.primary,
+.btn.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ffe45a 0%, #ffc21a 60%, #ffab00 100%);
+  border-color: var(--ink);
+  color: #fff;
+  box-shadow: 0 5px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.6);
+}
+
+.btn.primary:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.btn.ghost,
+.btn.ghost:hover:not(:disabled) {
+  background: var(--panel-dark);
+}
+
+.btn.big small {
+  -webkit-text-stroke: 2px var(--ink);
+  font-size: 0.82rem;
+  opacity: 1;
+}
+
+.btn.big strong {
+  font-size: 1.35rem;
+  font-weight: 400;
+}
+
+.icon-btn {
+  border: 3px solid var(--ink);
+  background: #ff4d5e;
+  color: #fff;
+  box-shadow: 0 3px 0 var(--ink);
+  font-family: system-ui, sans-serif;
+  font-weight: 900;
+}
+
+/* inputs */
+input[type='text'],
+input:not([type]) {
+  background: #fff;
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.12);
+  font-family: 'Lilita One', system-ui, sans-serif;
+  font-size: 1.05rem;
+}
+
+input::placeholder {
+  color: #8a93b5;
+}
+
+input:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px #ffd21f;
+}
+
+.field > span,
+.eyebrow,
+.char-btn-text small,
+.hud-timer span {
+  color: #ffe27a;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+}
+
+.seg {
+  background: var(--panel-dark);
+  border: 3px solid var(--ink);
+}
+
+.seg button {
+  color: #b9c9f5;
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.seg button.on {
+  background: linear-gradient(180deg, #ffe45a, #ffb300);
+  color: #fff;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.controls {
+  border-top: 3px solid rgba(26, 20, 38, 0.35);
+  color: #fff;
+}
+
+/* badges look like brawler portraits */
+.badge {
+  background: radial-gradient(circle at 35% 25%, color-mix(in srgb, var(--c) 55%, #fff), var(--c) 70%);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.badge svg {
+  stroke-width: 2.6;
+}
+
+/* character picker */
+.char-btn {
+  border-radius: 16px;
+}
+
+.char-btn:hover {
+  border-color: var(--ink);
+}
+
+.char-btn strong {
+  font-size: 1.15rem;
+  font-weight: 400;
+}
+
+.caret {
+  color: #ffd21f;
+}
+
+.char-card {
+  background: var(--panel-dark);
+  border: 3px solid var(--ink);
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.char-card:hover {
+  border-color: var(--ink);
+  transform: translateY(-2px);
+}
+
+.char-card.active {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 70%, #fff), var(--c));
+  border-color: var(--ink);
+}
+
+.char-card strong {
+  font-weight: 400;
+  font-size: 1.05rem;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px var(--ink);
+}
+
+.char-card .element {
+  color: #ffe27a;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 2px var(--ink);
+}
+
+.char-card.active .element,
+.char-card.active .stats {
+  color: #fff;
+}
+
+.char-card .stats {
+  color: #c7d5ff;
+  font-family: system-ui, sans-serif;
+  font-weight: 700;
+}
+
+.char-detail {
+  border-top: 3px solid rgba(26, 20, 38, 0.35);
+}
+
+.char-detail-head h3 span,
+.showcase .element,
+.hp-name span {
+  color: #ffe27a;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px var(--ink);
+}
+
+.showcase h2 {
+  font-size: 2.2rem;
+}
+
+.powers li {
+  background: rgba(10, 20, 70, 0.35);
+  border: 2px solid rgba(26, 20, 38, 0.5);
+}
+
+.powers li strong {
+  font-weight: 400;
+  font-size: 0.95rem;
+}
+
+.powers li span {
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+  color: #d7e5ff;
+}
+
+.powers li em {
+  color: #ffe27a;
+}
+
+.powers li.ult {
+  background: linear-gradient(90deg, rgba(255, 210, 31, 0.35), rgba(255, 170, 0, 0.15));
+  border-color: #ffd21f;
+}
+
+/* lobby + end */
+.lobby-list li {
+  background: var(--panel-dark);
+  border: 3px solid var(--ink);
+}
+
+.lobby-list li.empty {
+  border-style: dashed;
+}
+
+.who small {
+  color: #c7d5ff;
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+}
+
+.tag {
+  background: #ffd21f;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+}
+
+.tag.you {
+  background: #7dff6a;
+  color: var(--ink);
+}
+
+.code {
+  color: #ffd21f;
+  -webkit-text-stroke: 5px var(--ink);
+}
+
+.waiting {
+  color: #fff;
+}
+
+.winner h2 {
+  font-size: 2.6rem;
+  color: #ffd21f;
+  -webkit-text-stroke: 6px var(--ink);
+  text-shadow: 0 5px 0 var(--ink);
+}
+
+.results th {
+  color: #ffe27a;
+}
+
+.results td,
+.results th {
+  border-bottom: 2px solid rgba(26, 20, 38, 0.35);
+}
+
+.results tr.you td {
+  color: #7dff6a;
+}
+
+/* HUD */
+.hp-bar {
+  height: 22px;
+  background: #3b2f4a;
+  border: 3px solid var(--ink);
+}
+
+.hp-bar i {
+  background: linear-gradient(180deg, #8af06a, #4cc22c);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.35);
+}
+
+.hp-bar i.low {
+  background: linear-gradient(180deg, #ff7a6a, #e8302c);
+}
+
+.hp-bar span {
+  font-size: 0.85rem;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px var(--ink);
+}
+
+.hp-name strong {
+  font-weight: 400;
+  font-size: 1.1rem;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px var(--ink);
+}
+
+.chip {
+  border: 2px solid var(--ink);
+  color: #fff;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 2px var(--ink);
+  font-weight: 400;
+}
+
+.hud-score li.you {
+  background: rgba(255, 210, 31, 0.35);
+}
+
+.hud-score li.head {
+  color: #ffe27a;
+}
+
+.hud-score em,
+.hud-score small {
+  color: #d7e5ff;
+}
+
+.hud-score .dot {
+  border: 2px solid var(--ink);
+}
+
+.hud-timer strong {
+  font-size: 1.9rem;
+  font-weight: 400;
+  -webkit-text-stroke: 5px var(--ink);
+}
+
+.killfeed li span {
+  color: #ffe27a;
+}
+
+.killfeed b {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px var(--ink);
+  font-weight: 400;
+}
+
+.respawn {
+  background: linear-gradient(180deg, #ff5a6a, #d42a40);
+  border: 3px solid var(--ink);
+  box-shadow: 0 6px 0 var(--ink);
+}
+
+.respawn strong {
+  font-size: 2rem;
+  -webkit-text-stroke: 5px var(--ink);
+}
+
+.lock-hint {
+  color: #fff;
+  border-radius: 99px;
+}
+
+.crosshair span {
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--ink);
+}
+
+.slot {
+  background: var(--panel-dark);
+  border: 3px solid var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.slot.ready {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 65%, #fff), var(--c));
+  border-color: var(--ink);
+}
+
+.slot.ult {
+  border-color: var(--ink);
+}
+
+.slot.ult.ready {
+  background: linear-gradient(180deg, #ffe45a, #ffab00);
+  border-color: var(--ink);
+  box-shadow: 0 3px 0 var(--ink), 0 0 18px rgba(255, 210, 31, 0.8);
+}
+
+.slot-name {
+  font-size: 0.78rem;
+  font-weight: 400;
+  -webkit-text-stroke: 3px var(--ink);
+}
+
+.slot-txt {
+  font-size: 1.6rem;
+  font-weight: 400;
+  -webkit-text-stroke: 5px var(--ink);
+}
+
+.slot-cd {
+  background: rgba(16, 20, 50, 0.7);
+}
+
+.toast {
+  background: var(--panel-dark);
+  border: 3px solid var(--ink);
+  box-shadow: 0 5px 0 var(--ink);
+}
+
+.vignette {
+  box-shadow: inset 0 0 140px rgba(255, 30, 60, 0.7);
+}

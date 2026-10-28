@@ -3,6 +3,7 @@ import { getChar, type Ability, type CharacterDef, type Effect } from './charact
 import { buildArena, groundAt, type Arena } from './arena';
 import { buildFighterMesh, type FighterVisual } from './fighterMesh';
 import { Particles } from './particles';
+import { OUTLINE_MAT } from './toon';
 import type { FighterState, Vec3Tuple } from '../shared/protocol';
 
 export type SlotKind = 'local' | 'remote' | 'bot';
@@ -189,7 +190,7 @@ export class Game {
   private menuAngle = 0;
 
   camYaw = 0;
-  camPitch = 0.32;
+  camPitch = 0.55;
   private keys = new Set<string>();
   private jumpBufferedUntil = 0;
   pointerLocked = false;
@@ -204,8 +205,7 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMapping = THREE.NoToneMapping;
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.id = 'game-canvas';
     this.arena = buildArena(this.scene);
@@ -799,6 +799,9 @@ export class Game {
     const size = ab.size ?? 0.4;
     const mesh = new THREE.Mesh(this.sphereGeo, this.mat(color));
     mesh.scale.setScalar(size);
+    const outline = new THREE.Mesh(this.sphereGeo, OUTLINE_MAT);
+    outline.scale.setScalar(1.22);
+    mesh.add(outline);
     mesh.position.copy(pos);
     this.scene.add(mesh);
     this.projectiles.push({
@@ -878,6 +881,9 @@ export class Game {
         f.def.id === 'frost' ? new THREE.ConeGeometry(r * 0.35, r * 1.2, 6) : new THREE.SphereGeometry(r * 0.3, 16, 12),
         new THREE.MeshBasicMaterial({ color }),
       );
+      const outline = new THREE.Mesh(faller.geometry, OUTLINE_MAT);
+      outline.scale.setScalar(1.12);
+      faller.add(outline);
       if (f.def.id === 'frost') faller.rotation.x = Math.PI;
       this.scene.add(faller);
     }
@@ -891,7 +897,7 @@ export class Game {
   }
 
   private novaFx(at: THREE.Vector3, r: number, color: number) {
-    const ringMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const ringMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide });
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 64), ringMat);
     ring.rotation.x = -Math.PI / 2;
     ring.position.copy(at);
@@ -899,7 +905,7 @@ export class Game {
       ring.scale.setScalar(0.5 + r * Math.sqrt(k));
       ringMat.opacity = 0.9 * (1 - k);
     });
-    const sMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending });
+    const sMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false });
     const sphere = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), sMat);
     sphere.position.copy(at);
     this.addFx(sphere, 0.35, (k) => {
@@ -915,7 +921,7 @@ export class Game {
     dir.normalize();
     const mid = o.clone().addScaledVector(dir, len / 2);
     const q = new THREE.Quaternion().setFromUnitVectors(UP, dir);
-    const outerMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending });
+    const outerMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, depthWrite: false });
     const outer = new THREE.Mesh(new THREE.CylinderGeometry(width, width, len, 12, 1, true), outerMat);
     outer.position.copy(mid);
     outer.quaternion.copy(q);
@@ -940,6 +946,7 @@ export class Game {
     this.scene.remove(obj);
     obj.traverse((o) => {
       const m = o as THREE.Mesh;
+      if (m.userData.isOutline || m.material === OUTLINE_MAT) return;
       if (m.geometry && m.geometry !== this.sphereGeo) m.geometry.dispose();
       const mat = m.material as THREE.Material | undefined;
       if (mat && ![...this.matCache.values()].includes(mat as THREE.MeshBasicMaterial)) mat.dispose();
@@ -992,6 +999,7 @@ export class Game {
     this.particles.update(dt);
     this.animateFighters(dt);
     for (const c of this.arena.crystals) c.rotation.y += dt * 0.8;
+    this.arena.clouds.rotation.y += dt * 0.004;
 
     if (this.net && this.running && now - this.lastStateSent > 0.05) {
       this.lastStateSent = now;
@@ -1421,15 +1429,15 @@ export class Game {
     const f = this.localId ? this.fighters.get(this.localId) : undefined;
     if (!f || this.demo) {
       this.menuAngle += dt * 0.06;
-      const r = 62;
-      this.camera.position.set(Math.cos(this.menuAngle) * r, 26, Math.sin(this.menuAngle) * r);
+      const r = 42;
+      this.camera.position.set(Math.cos(this.menuAngle) * r, 40, Math.sin(this.menuAngle) * r);
       this.camera.lookAt(0, 2, 0);
       return;
     }
     const fwd = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
     const right = new THREE.Vector3(-Math.cos(this.camYaw), 0, Math.sin(this.camYaw));
     const target = new THREE.Vector3(f.pos.x, f.pos.y + 2.2, f.pos.z);
-    const dist = 10;
+    const dist = 12.5;
     const want = target
       .clone()
       .addScaledVector(right, 1.3)
@@ -1444,7 +1452,7 @@ export class Game {
     want.y = Math.max(0.6, want.y);
     this.camera.position.lerp(want, 1 - Math.exp(-18 * dt));
     const look = target.clone().addScaledVector(right, 0.6).addScaledVector(fwd, 10);
-    look.y += 0.8 - this.camPitch * 4;
+    look.y += 0.8 - this.camPitch * 5;
     this.camera.lookAt(look);
   }
 }

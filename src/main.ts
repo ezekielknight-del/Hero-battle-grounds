@@ -1,3 +1,4 @@
+import '@fontsource/lilita-one';
 import './style.css';
 import { CHARACTERS, getChar, type CharacterDef } from './characters';
 import { Game, KO_TARGET, type KillEvent, type NetHooks, type ScoreRow, type Slot } from './game';

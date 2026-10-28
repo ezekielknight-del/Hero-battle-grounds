@@ -6,12 +6,12 @@ A 3D PVP arena brawler that runs in the browser. Six elemental fighters battle i
 
 | Fighter | Element | Style |
 | --- | --- | --- |
-| Frost | Ice | Round snow brawler in a blue cap. Slows and freezes enemies |
-| Blaze | Fire | Masked muscle-house. All-out offense, sets enemies on fire |
-| Verdant | Green energy | A cactus. Homing orbs, healing and a huge energy cannon |
-| Tide | Water | One-eyed dockhand with a bottle. Knockback, bubbles and whirlpools |
-| Turbo | Car powers | Screen-faced robot with a blaster arm. Tanky rammer |
-| Gale | Air | Wind-blown kid in a huge scarf, and an airbender |
+| Frost | Ice | Blocky avatar in a blue cap. Chills enemies, then hits them harder |
+| Blaze | Fire | Blocky avatar with a flame tuft. Exploding fire that follows him |
+| Verdant | Green energy | Blocky green avatar with a flower. Heals by dealing damage, and can teleport |
+| Tide | Water | Blocky avatar with one eye and a bottle. Pushes, reels, and launches |
+| Turbo | Car powers | Blocky gold avatar with a screen face. Rams, mines, and bouncing shots |
+| Gale | Air | Blocky avatar in a striped scarf. A returning blade and huge gusts |
 
 Each fighter has 9 powers on keys `1`–`9`, and no two fighters share a power. Frost chills and then shatters chilled enemies. Blaze's shots explode and his fire follows him. Verdant heals by dealing damage and can teleport. Tide pushes, reels, and launches people. Turbo rams, lays mines, and bounces shots. Gale's blade comes back, and his wind throws everyone around. Power `9` is an ultimate with a long cooldown.
 

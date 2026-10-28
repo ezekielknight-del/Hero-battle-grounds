@@ -1,7 +1,5 @@
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { CharacterDef } from './characters';
-import { addOutlines, toon } from './toon';
 
 export interface FighterVisual {
   root: THREE.Group;
@@ -18,271 +16,179 @@ export interface FighterVisual {
   dispose(): void;
 }
 
-const rbox = (w: number, h: number, d: number, r = 0.08) =>
-  new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2.2, h / 2.2, d / 2.2));
+const plastics = new Map<number, THREE.MeshStandardMaterial>();
 
-const sphere = (r: number) => new THREE.SphereGeometry(r, 22, 16);
-
-function part(geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
-  const m = new THREE.Mesh(geo, mat);
-  m.position.set(x, y, z);
-  m.castShadow = true;
+function plastic(color: number, emissive = 0): THREE.MeshStandardMaterial {
+  const key = color + emissive * 17;
+  let m = plastics.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.42,
+      metalness: 0.02,
+      emissive,
+      emissiveIntensity: emissive ? 0.7 : 0,
+    });
+    plastics.set(key, m);
+  }
   return m;
 }
 
-function add(parent: THREE.Object3D, mesh: THREE.Object3D) {
-  parent.add(mesh);
-  return mesh;
+function mesh(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.Mesh {
+  const m = new THREE.Mesh(geo, plastic(color));
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
 }
 
-/** Big cartoon eye: white oval, dark pupil, small shine. */
-function eye(parent: THREE.Object3D, x: number, y: number, z: number, s = 1, look = 0) {
-  const white = add(parent, part(sphere(0.16 * s), toon(0xfffdf8), x, y, z));
-  white.scale.set(1, 1.25, 0.55);
-  add(parent, part(sphere(0.075 * s), toon(0x1a1426), x + look, y - 0.01 * s, z + 0.07 * s));
-  add(parent, part(sphere(0.035 * s), toon(0xffffff), x + look + 0.04 * s, y + 0.04 * s, z + 0.1 * s));
-}
+const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d);
+const cyl = (r: number, h: number) => new THREE.CylinderGeometry(r, r, h, 16);
 
-function leg(x: number, hip: number, thigh: number, bootH: number, thighMat: THREE.Material, bootMat: THREE.Material) {
-  const pivot = new THREE.Group();
-  pivot.position.set(x, hip, 0);
-  pivot.add(part(rbox(0.34, thigh, 0.36, 0.1), thighMat, 0, -thigh / 2, 0));
-  pivot.add(part(rbox(0.46, bootH, 0.62, 0.12), bootMat, 0, -thigh - bootH / 2 + 0.02, 0.06));
-  return pivot;
-}
+/** Classic blocky avatar: cylinder limbs, box torso, cube head. */
+function rig(body: THREE.Group, colors: { head: number; torso: number; arm: number; leg: number }) {
+  const legL = new THREE.Group();
+  const legR = new THREE.Group();
+  legL.position.set(-0.28, 1.02, 0);
+  legR.position.set(0.28, 1.02, 0);
+  legL.add(mesh(cyl(0.2, 1.02), colors.leg, 0, -0.51, 0));
+  legR.add(mesh(cyl(0.2, 1.02), colors.leg, 0, -0.51, 0));
 
-function arm(x: number, shoulder: number, len: number, thick: number, mat: THREE.Material, hand: THREE.Material) {
-  const pivot = new THREE.Group();
-  pivot.position.set(x, shoulder, 0);
-  pivot.add(part(rbox(thick, len, thick * 0.9, thick * 0.35), mat, 0, -len / 2, 0));
-  pivot.add(part(sphere(thick * 0.62), hand, 0, -len - thick * 0.15, 0));
-  return pivot;
-}
-
-interface Built {
-  legL: THREE.Object3D;
-  legR: THREE.Object3D;
-  armL: THREE.Object3D;
-  armR: THREE.Object3D;
-  labelY: number;
-}
-
-function buildFrost(body: THREE.Group): Built {
-  const snow = toon(0xf7fbff);
-  const cap = toon(0x2f74ff);
-  const capDark = toon(0x1d4ed8);
-  const red = toon(0xe23b4a);
-  const yellow = toon(0xffd23a);
-  const boot = toon(0x173a8a);
-  const legL = leg(-0.26, 0.7, 0.34, 0.28, cap, boot);
-  const legR = leg(0.26, 0.7, 0.34, 0.28, cap, boot);
-  body.add(part(sphere(0.9), snow, 0, 1.45, 0));
-  body.add(part(rbox(0.7, 0.55, 0.16, 0.08), cap, 0, 1.12, 0.82));
-  body.add(part(rbox(0.36, 0.2, 0.08, 0.04), capDark, 0, 1.0, 0.9));
-  body.add(part(sphere(0.08), yellow, -0.16, 1.22, 0.92));
-  body.add(part(sphere(0.08), yellow, 0.16, 1.22, 0.92));
-  for (const s of [-1, 1]) {
-    const wing = part(sphere(0.15), red, 0.2 * s, 1.42, 0.86);
-    wing.scale.set(1.4, 0.75, 0.5);
-    body.add(wing);
+  const torso = mesh(box(1.12, 1.12, 0.58), colors.torso, 0, 1.58, 0);
+  body.add(torso);
+  const stud = plastic(colors.torso);
+  for (const x of [-0.28, 0.28]) {
+    for (const z of [-0.12, 0.12]) {
+      const s = new THREE.Mesh(cyl(0.07, 0.05), stud);
+      s.position.set(x, 2.16, z);
+      body.add(s);
+    }
   }
-  body.add(part(sphere(0.09), red, 0, 1.42, 0.96));
-  eye(body, -0.26, 1.72, 0.78, 1.25);
-  eye(body, 0.26, 1.72, 0.78, 1.25);
-  const mouth = part(sphere(0.12), toon(0x1a1426), 0, 1.48, 0.84);
-  mouth.scale.set(0.9, 0.7, 0.4);
-  body.add(mouth);
-  body.add(part(new THREE.CylinderGeometry(0.78, 0.78, 0.12, 24), cap, 0, 2.18, 0));
-  const dome = part(sphere(0.66), cap, 0, 2.38, 0);
-  dome.scale.y = 0.7;
-  body.add(dome);
-  body.add(part(sphere(0.16), toon(0x9ad7ff, 0x9ad7ff, 0.4), 0, 2.68, 0.08));
-  const armL = arm(-0.98, 1.5, 0.42, 0.3, snow, toon(0xdbeafe));
-  const armR = arm(0.98, 1.5, 0.42, 0.3, snow, toon(0xdbeafe));
-  armR.add(part(sphere(0.2), snow, 0.05, -0.78, 0.15));
-  return { legL, legR, armL, armR, labelY: 3.35 };
-}
 
-function buildBlaze(body: THREE.Group): Built {
-  const skin = toon(0xe8924a);
-  const mask = toon(0x2a6bff);
-  const red = toon(0xdc2626);
-  const boot = toon(0x1e3a8a);
-  const gold = toon(0xf5c542);
-  const legL = leg(-0.28, 0.95, 0.48, 0.34, skin, boot);
-  const legR = leg(0.28, 0.95, 0.48, 0.34, skin, boot);
-  body.add(part(rbox(1.3, 1.0, 0.78, 0.22), skin, 0, 1.5, 0));
-  for (const s of [-1, 1]) body.add(part(sphere(0.28), skin, 0.28 * s, 1.72, 0.28));
-  body.add(part(rbox(1.15, 0.22, 0.82, 0.08), red, 0, 1.05, 0));
-  body.add(part(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 16), gold, 0, 1.05, 0.42));
-  const head = part(sphere(0.58), mask, 0, 2.28, 0);
-  head.scale.set(1.05, 0.95, 1);
-  body.add(head);
-  for (const s of [-1, 1]) {
-    const ring = part(new THREE.TorusGeometry(0.16, 0.045, 8, 18), red, 0.24 * s, 2.34, 0.46);
-    body.add(ring);
-    eye(body, 0.24 * s, 2.34, 0.5, 0.85);
-  }
-  const grin = part(rbox(0.55, 0.16, 0.08, 0.05), toon(0xfffdf8), 0, 2.02, 0.5);
-  body.add(grin);
-  for (let i = 0; i < 4; i++) body.add(part(rbox(0.02, 0.16, 0.02, 0.01), toon(0x1a1426), -0.18 + i * 0.12, 2.02, 0.55));
-  const armL = arm(-0.95, 1.9, 0.7, 0.38, skin, boot);
-  const armR = arm(0.95, 1.9, 0.7, 0.38, skin, boot);
-  return { legL, legR, armL, armR, labelY: 3.55 };
-}
-
-function buildVerdant(body: THREE.Group): Built {
-  const green = toon(0x3dce4a);
-  const dark = toon(0x249636);
-  const orange = toon(0xf08a2a);
-  const red = toon(0xef4444);
-  const pink = toon(0xff7aa2);
-  const legL = leg(-0.22, 0.48, 0.22, 0.2, dark, toon(0x166534));
-  const legR = leg(0.22, 0.48, 0.22, 0.2, dark, toon(0x166534));
-  const cactus = part(sphere(0.78), green, 0, 1.45, 0);
-  cactus.scale.set(1.15, 1.45, 1);
-  body.add(cactus);
-  body.add(part(new THREE.CylinderGeometry(0.72, 0.78, 0.38, 20), orange, 0, 0.78, 0));
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2;
-    const spike = part(new THREE.ConeGeometry(0.06, 0.28, 5), dark, Math.cos(a) * 0.9, 1.15 + (i % 3) * 0.35, Math.sin(a) * 0.78);
-    spike.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(Math.cos(a), 0.15, Math.sin(a)).normalize());
-    body.add(spike);
-  }
-  body.add(part(sphere(0.22), red, 0, 2.62, 0));
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const petal = part(sphere(0.2), pink, Math.cos(a) * 0.28, 2.66, Math.sin(a) * 0.28);
-    petal.scale.set(1.4, 0.65, 0.85);
-    body.add(petal);
-  }
-  eye(body, -0.28, 1.7, 0.72, 1.5);
-  eye(body, 0.28, 1.7, 0.72, 1.5);
-  const mouth = part(sphere(0.16), toon(0x14532d), 0, 1.38, 0.74);
-  mouth.scale.set(1.3, 1, 0.4);
-  body.add(mouth);
-  const armL = arm(-0.95, 1.55, 0.36, 0.22, green, green);
-  const armR = arm(0.95, 1.55, 0.36, 0.22, green, green);
-  return { legL, legR, armL, armR, labelY: 3.4 };
-}
-
-function buildTide(body: THREE.Group): Built {
-  const shirt = toon(0xfff3e4);
-  const vest = toon(0xe23b4a);
-  const pants = toon(0x4a372c);
-  const boot = toon(0x6b4423);
-  const hat = toon(0xf0b429);
-  const housing = toon(0x6d5bd0);
-  const orange = toon(0xe07020);
-  const legL = leg(-0.24, 0.9, 0.46, 0.32, pants, boot);
-  const legR = leg(0.24, 0.9, 0.46, 0.32, pants, boot);
-  body.add(part(rbox(1.05, 0.9, 0.7, 0.16), vest, 0, 1.4, 0));
-  body.add(part(rbox(0.42, 0.72, 0.1, 0.04), shirt, 0, 1.42, 0.32));
-  body.add(part(sphere(0.1), toon(0xf5c542), 0, 1.12, 0.4));
-  body.add(part(new THREE.CylinderGeometry(0.55, 0.58, 0.62, 20), housing, 0, 2.12, 0));
-  body.add(part(sphere(0.28), toon(0xf5d90a), 0, 2.16, 0.4));
-  body.add(part(sphere(0.12), toon(0x1a1426), 0, 2.14, 0.6));
-  body.add(part(sphere(0.18), orange, 0, 1.88, 0.48));
-  for (const s of [-1, 1]) {
-    const m = part(sphere(0.26), orange, 0.28 * s, 1.78, 0.36);
-    m.scale.set(1.5, 0.65, 0.75);
-    m.rotation.z = -0.5 * s;
-    body.add(m);
-  }
-  const bun = part(sphere(0.5), hat, 0, 2.55, 0);
-  bun.scale.set(1.15, 0.62, 1.15);
-  body.add(bun);
-  const armL = arm(-0.78, 1.7, 0.55, 0.28, shirt, toon(0xf0c29c));
-  const armR = arm(0.78, 1.7, 0.55, 0.28, shirt, toon(0xf0c29c));
-  const bottle = new THREE.Group();
-  bottle.position.set(0.12, -0.95, 0.12);
-  bottle.rotation.z = 0.15;
-  bottle.add(part(new THREE.CylinderGeometry(0.16, 0.2, 0.7, 12), toon(0xf08a2a), 0, 0.2, 0));
-  bottle.add(part(new THREE.CylinderGeometry(0.2, 0.2, 0.12, 12), toon(0xfff3e4), 0, 0.05, 0));
-  bottle.add(part(new THREE.CylinderGeometry(0.07, 0.09, 0.18, 10), toon(0xf0b429), 0, 0.62, 0));
-  armR.add(bottle);
-  return { legL, legR, armL, armR, labelY: 3.6 };
-}
-
-function buildTurbo(body: THREE.Group): Built {
-  const gold = toon(0xf0c43a);
-  const dark = toon(0xb8860b);
-  const screen = toon(0x10244d);
-  const glow = toon(0x7af0ff, 0x7af0ff, 0.9);
-  const red = toon(0xe23b4a);
-  const legL = leg(-0.28, 0.62, 0.28, 0.26, dark, toon(0x3f3f46));
-  const legR = leg(0.28, 0.62, 0.28, 0.26, dark, toon(0x3f3f46));
-  body.add(part(rbox(1.35, 1.35, 1.05, 0.2), gold, 0, 1.5, 0));
-  body.add(part(rbox(0.18, 1.15, 0.08, 0.04), dark, 0, 1.5, 0.52));
-  body.add(part(rbox(0.95, 0.55, 0.08, 0.06), screen, 0, 1.7, 0.56));
-  for (const s of [-1, 1]) {
-    const brow = part(rbox(0.32, 0.09, 0.06, 0.03), glow, 0.24 * s, 1.88, 0.62);
-    brow.rotation.z = -0.35 * s;
-    body.add(brow);
-    body.add(part(sphere(0.12), glow, 0.22 * s, 1.68, 0.62));
-  }
-  body.add(part(sphere(0.11), red, -0.2, 1.22, 0.56));
-  body.add(part(sphere(0.11), red, 0.2, 1.22, 0.56));
-  body.add(part(rbox(0.12, 0.22, 0.06, 0.03), toon(0x1a1426), 0.46, 1.32, 0.54));
-  const armL = arm(-0.95, 1.7, 0.55, 0.32, gold, gold);
+  const armL = new THREE.Group();
   const armR = new THREE.Group();
-  armR.position.set(0.95, 1.7, 0);
-  armR.add(part(rbox(0.3, 0.4, 0.3, 0.1), gold, 0, -0.2, 0));
-  const barrel = part(new THREE.CylinderGeometry(0.14, 0.18, 0.7, 12), toon(0x3b82f6), 0, -0.55, 0.15);
-  barrel.rotation.x = Math.PI / 2.4;
-  armR.add(barrel);
-  armR.add(part(new THREE.CylinderGeometry(0.1, 0.1, 0.3, 10), glow, 0, -0.7, 0.38));
-  return { legL, legR, armL, armR, labelY: 2.95 };
-}
+  armL.position.set(-0.78, 2.08, 0);
+  armR.position.set(0.78, 2.08, 0);
+  armL.add(mesh(cyl(0.18, 1.02), colors.arm, 0, -0.51, 0));
+  armR.add(mesh(cyl(0.18, 1.02), colors.arm, 0, -0.51, 0));
 
-function buildGale(body: THREE.Group): Built {
-  const skin = toon(0xf6d7c3);
-  const hair = toon(0x1a1a2e);
-  const jacket = toon(0x5b6472);
-  const pants = toon(0x2c3140);
-  const boot = toon(0xf8fafc);
-  const stripe = toon(0x38bdf8);
-  const legL = leg(-0.2, 0.85, 0.42, 0.28, pants, boot);
-  const legR = leg(0.2, 0.85, 0.42, 0.28, pants, boot);
-  body.add(part(rbox(0.78, 0.72, 0.5, 0.14), jacket, 0, 1.28, 0));
-  body.add(part(rbox(0.7, 0.12, 0.52, 0.04), toon(0x1f2937), 0, 0.95, 0));
-  const head = part(rbox(0.9, 0.82, 0.78, 0.28), skin, 0, 2.05, 0);
+  const head = new THREE.Group();
+  head.position.set(0, 2.55, 0);
+  head.add(mesh(box(0.86, 0.86, 0.86), colors.head));
   body.add(head);
-  const swoop = part(rbox(1.05, 0.7, 0.9, 0.22), hair, -0.05, 2.48, -0.02);
-  swoop.rotation.z = 0.2;
-  body.add(swoop);
-  const bang = part(rbox(0.5, 0.7, 0.28, 0.1), hair, -0.28, 2.12, 0.34);
-  bang.rotation.z = 0.15;
-  body.add(bang);
-  eye(body, 0.22, 2.05, 0.42, 1.15, 0.02);
-  const smirk = part(rbox(0.24, 0.06, 0.05, 0.02), toon(0x7c4a3a), 0.12, 1.78, 0.42);
-  smirk.rotation.z = -0.35;
-  body.add(smirk);
-  for (let i = 0; i < 4; i++) {
-    const mat = i % 2 ? stripe : boot;
-    const band = part(rbox(1.05, 0.16, 0.78, 0.06), mat, 0, 1.78 - i * 0.08, 0.04);
-    band.rotation.x = 0.55;
-    body.add(band);
-  }
-  const tail = part(rbox(0.34, 1.05, 0.14, 0.06), stripe, 0.62, 1.05, -0.3);
-  tail.rotation.z = 0.9;
-  tail.rotation.x = 0.5;
-  body.add(tail);
-  const tail2 = part(rbox(0.3, 0.7, 0.12, 0.05), boot, 0.95, 0.7, -0.4);
-  tail2.rotation.z = 1.1;
-  body.add(tail2);
-  const armL = arm(-0.58, 1.55, 0.5, 0.22, jacket, stripe);
-  const armR = arm(0.58, 1.55, 0.5, 0.22, jacket, stripe);
-  return { legL, legR, armL, armR, labelY: 3.25 };
+  return { legL, legR, armL, armR, head };
 }
 
-const BUILDERS: Record<string, (body: THREE.Group) => Built> = {
-  frost: buildFrost,
-  blaze: buildBlaze,
-  verdant: buildVerdant,
-  tide: buildTide,
-  turbo: buildTurbo,
-  gale: buildGale,
+const BLACK = 0x1b1b1b;
+
+function smile(head: THREE.Group) {
+  for (const x of [-0.18, 0.18]) {
+    const eye = mesh(new THREE.SphereGeometry(0.075, 12, 8), BLACK, x, 0.08, 0.44);
+    eye.scale.set(1, 1.2, 0.35);
+    head.add(eye);
+  }
+  const mouth = mesh(new THREE.TorusGeometry(0.16, 0.028, 6, 16, Math.PI * 0.8), BLACK, 0, -0.16, 0.44);
+  mouth.rotation.z = Math.PI * 1.1;
+  head.add(mouth);
+}
+
+function decorate(id: string, body: THREE.Group, head: THREE.Group, armR: THREE.Object3D) {
+  switch (id) {
+    case 'frost': {
+      head.add(mesh(box(1.02, 0.18, 1.02), 0x2f74ff, 0, 0.5, 0));
+      head.add(mesh(box(0.74, 0.36, 0.74), 0x3b82f6, 0, 0.74, 0));
+      head.add(mesh(box(0.18, 0.18, 0.18), 0x9ad7ff, 0, 0.98, 0));
+      body.add(mesh(box(0.22, 0.1, 0.08), 0xe23b4a, -0.1, 1.85, 0.32));
+      body.add(mesh(box(0.22, 0.1, 0.08), 0xe23b4a, 0.1, 1.85, 0.32));
+      body.add(mesh(box(0.1, 0.1, 0.08), 0xb91c1c, 0, 1.85, 0.34));
+      smile(head);
+      break;
+    }
+    case 'blaze': {
+      const lBrow = mesh(box(0.22, 0.06, 0.06), BLACK, -0.18, 0.24, 0.44);
+      lBrow.rotation.z = 0.4;
+      const rBrow = mesh(box(0.22, 0.06, 0.06), BLACK, 0.18, 0.24, 0.44);
+      rBrow.rotation.z = -0.4;
+      head.add(lBrow, rBrow);
+      for (const x of [-0.16, 0.16]) head.add(mesh(box(0.1, 0.1, 0.06), BLACK, x, 0.06, 0.44));
+      head.add(mesh(box(0.28, 0.06, 0.06), BLACK, 0, -0.16, 0.44));
+      head.add(mesh(box(0.5, 0.28, 0.4), 0xf97316, 0, 0.64, 0));
+      head.add(mesh(box(0.28, 0.32, 0.28), 0xfacc15, 0, 0.9, 0));
+      break;
+    }
+    case 'verdant': {
+      smile(head);
+      head.add(mesh(box(0.26, 0.26, 0.26), 0xef4444, 0, 0.72, 0));
+      for (const [x, z] of [[0.24, 0], [-0.24, 0], [0, 0.24], [0, -0.24]] as const) {
+        head.add(mesh(box(0.2, 0.12, 0.2), 0xf472b6, x, 0.62, z));
+      }
+      break;
+    }
+    case 'tide': {
+      const eye = mesh(new THREE.SphereGeometry(0.16, 14, 10), 0xf5d90a, 0, 0.08, 0.4);
+      eye.scale.z = 0.45;
+      head.add(eye);
+      head.add(mesh(new THREE.SphereGeometry(0.07, 10, 8), BLACK, 0, 0.08, 0.5));
+      head.add(mesh(box(0.46, 0.12, 0.12), 0xe07020, 0, -0.16, 0.4));
+      head.add(mesh(box(0.22, 0.08, 0.06), BLACK, 0, -0.28, 0.44));
+      const hat = mesh(cyl(0.4, 0.22), 0xf0b429, 0, 0.52, 0);
+      head.add(hat);
+      head.add(mesh(cyl(0.28, 0.28), 0xf0b429, 0, 0.72, 0));
+      const bottle = new THREE.Group();
+      bottle.position.set(0.05, -1.15, 0.15);
+      bottle.add(mesh(cyl(0.1, 0.42), 0xf08a2a, 0, 0.2, 0));
+      bottle.add(mesh(cyl(0.11, 0.08), 0xfff3e4, 0, 0.02, 0));
+      bottle.add(mesh(cyl(0.05, 0.12), 0xf0b429, 0, 0.46, 0));
+      armR.add(bottle);
+      break;
+    }
+    case 'turbo': {
+      const screen = plastic(0x10244d);
+      const panel = new THREE.Mesh(box(0.62, 0.36, 0.04), screen);
+      panel.position.set(0, 0.05, 0.44);
+      head.add(panel);
+      for (const x of [-0.14, 0.14]) {
+        const glow = new THREE.Mesh(box(0.16, 0.12, 0.04), plastic(0x7af0ff, 0x7af0ff));
+        glow.position.set(x, 0.06, 0.47);
+        head.add(glow);
+      }
+      body.add(mesh(box(0.14, 0.14, 0.06), 0xe23b4a, -0.18, 1.35, 0.3));
+      body.add(mesh(box(0.14, 0.14, 0.06), 0xe23b4a, 0.18, 1.35, 0.3));
+      const barrel = mesh(cyl(0.1, 0.55), 0x3b82f6, 0.02, -0.85, 0.2);
+      barrel.rotation.x = Math.PI / 2.3;
+      armR.add(barrel);
+      break;
+    }
+    case 'gale': {
+      head.add(mesh(box(0.92, 0.28, 0.92), 0x1a1a2e, 0, 0.4, -0.02));
+      const bang = mesh(box(0.4, 0.55, 0.12), 0x1a1a2e, -0.22, 0.12, 0.42);
+      head.add(bang);
+      const eye = mesh(new THREE.SphereGeometry(0.075, 12, 8), BLACK, 0.18, 0.06, 0.46);
+      eye.scale.set(1, 1.2, 0.35);
+      head.add(eye);
+      const smirk = mesh(box(0.22, 0.05, 0.04), BLACK, 0.06, -0.18, 0.45);
+      smirk.rotation.z = -0.3;
+      head.add(smirk);
+      for (let i = 0; i < 4; i++) {
+        body.add(mesh(box(0.7, 0.1, 0.64), i % 2 ? 0x38bdf8 : 0xf8fafc, 0, 2.02 - i * 0.1, 0.02));
+      }
+      const tail = mesh(box(0.18, 0.7, 0.1), 0x38bdf8, 0.55, 1.45, -0.15);
+      tail.rotation.z = 0.7;
+      body.add(tail);
+      break;
+    }
+    default:
+      smile(head);
+  }
+}
+
+const COLORS: Record<string, { head: number; torso: number; arm: number; leg: number }> = {
+  frost: { head: 0xf4fbff, torso: 0x3b82f6, arm: 0xe0f2fe, leg: 0x1d4ed8 },
+  blaze: { head: 0xf6d7a8, torso: 0xef4444, arm: 0xf97316, leg: 0x7f1d1d },
+  verdant: { head: 0x86efac, torso: 0x16a34a, arm: 0x4ade80, leg: 0x166534 },
+  tide: { head: 0xf6d7c3, torso: 0x2563eb, arm: 0x60a5fa, leg: 0x1e3a8a },
+  turbo: { head: 0xf5d76e, torso: 0xf0c43a, arm: 0xeab308, leg: 0x3f3f46 },
+  gale: { head: 0xf6d7c3, torso: 0xf8fafc, arm: 0x7dd3fc, leg: 0xe2e8f0 },
 };
 
 export function buildFighterMesh(def: CharacterDef): FighterVisual {
@@ -292,23 +198,24 @@ export function buildFighterMesh(def: CharacterDef): FighterVisual {
   const aura = new THREE.Group();
   body.add(aura);
 
-  const built = (BUILDERS[def.id] ?? buildBlaze)(body);
-  body.add(built.legL, built.legR, built.armL, built.armR);
-  addOutlines(body, 0.05);
+  const colors = COLORS[def.id] ?? COLORS.blaze;
+  const parts = rig(body, colors);
+  decorate(def.id, body, parts.head, parts.armR);
+  body.add(parts.legL, parts.legR, parts.armL, parts.armR);
 
   const shield = new THREE.Mesh(
-    new THREE.SphereGeometry(1.75, 24, 16),
-    new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.3, depthWrite: false }),
+    new THREE.SphereGeometry(1.6, 24, 16),
+    new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.28, depthWrite: false }),
   );
   shield.position.y = 1.5;
   shield.visible = false;
   root.add(shield);
 
   const ice = new THREE.Mesh(
-    rbox(1.9, 3.3, 1.9, 0.2),
-    new THREE.MeshToonMaterial({ color: 0xbfefff, transparent: true, opacity: 0.55 }),
+    box(1.6, 3.1, 1.6),
+    new THREE.MeshStandardMaterial({ color: 0xbfefff, transparent: true, opacity: 0.45, roughness: 0.15 }),
   );
-  ice.position.y = 1.6;
+  ice.position.y = 1.55;
   ice.visible = false;
   root.add(ice);
 
@@ -320,7 +227,7 @@ export function buildFighterMesh(def: CharacterDef): FighterVisual {
   tex.colorSpace = THREE.SRGBColorSpace;
   const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
   label.scale.set(2.9, 1.0, 1);
-  label.position.y = built.labelY;
+  label.position.y = 3.75;
   label.renderOrder = 10;
   root.add(label);
 
@@ -370,11 +277,24 @@ export function buildFighterMesh(def: CharacterDef): FighterVisual {
 
   const dispose = () => {
     root.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (mesh.geometry && !mesh.userData.isOutline) mesh.geometry.dispose();
+      const m = o as THREE.Mesh;
+      if (m.geometry) m.geometry.dispose();
     });
     tex.dispose();
   };
 
-  return { root, body, legL: built.legL, legR: built.legR, armL: built.armL, armR: built.armR, aura, shield, ice, label, setLabel, dispose };
+  return {
+    root,
+    body,
+    legL: parts.legL,
+    legR: parts.legR,
+    armL: parts.armL,
+    armR: parts.armR,
+    aura,
+    shield,
+    ice,
+    label,
+    setLabel,
+    dispose,
+  };
 }

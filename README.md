@@ -6,12 +6,12 @@ A 3D PVP arena brawler that runs in the browser. Six elemental fighters battle i
 
 | Fighter | Element | Style |
 | --- | --- | --- |
-| Frost | Ice | Slows and freezes enemies, then shatters them |
-| Blaze | Fire | All-out offense, sets enemies on fire |
-| Verdant | Green energy | Homing orbs, healing and a huge energy cannon |
-| Tide | Water | Knockback, bubble traps and whirlpools |
-| Turbo | Car powers (a human with nitro, ramps and burnouts) | Tanky rammer |
-| Gale | Air (an airbender) | The fastest fighter, flings enemies across the arena |
+| Frost | Ice | Round snow brawler in a blue cap. Slows and freezes enemies |
+| Blaze | Fire | Masked muscle-house. All-out offense, sets enemies on fire |
+| Verdant | Green energy | A cactus. Homing orbs, healing and a huge energy cannon |
+| Tide | Water | One-eyed dockhand with a bottle. Knockback, bubbles and whirlpools |
+| Turbo | Car powers | Screen-faced robot with a blaster arm. Tanky rammer |
+| Gale | Air | Wind-blown kid in a huge scarf, and an airbender |
 
 Each fighter has 9 powers on keys `1`–`9`. Power `9` is an ultimate with a long cooldown.
 

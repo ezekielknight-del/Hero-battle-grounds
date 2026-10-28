@@ -2,16 +2,10 @@ const wrap = (inner: string) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 
 export const ELEMENT_ICONS: Record<string, string> = {
-  frost: wrap(
-    '<path d="M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11"/><path d="M9.5 3.5 12 6l2.5-2.5M9.5 20.5 12 18l2.5 2.5"/>',
-  ),
-  blaze: wrap(
-    '<path d="M12 22c4 0 7-2.7 7-6.8 0-3.2-2-5.5-3.6-7.4-.4 1.9-1.4 3-2.6 3.4.4-3.3-1-6.6-3.8-9.2.2 3.4-1.6 5.6-3 7.5C4.9 11.1 5 12.8 5 15.2 5 19.3 8 22 12 22Z"/>',
-  ),
-  verdant: wrap('<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/>'),
-  tide: wrap('<path d="M12 2.5S5.5 10 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 10 12 2.5 12 2.5Z"/><path d="M9 15a3 3 0 0 0 3 3"/>'),
-  turbo: wrap(
-    '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/>',
-  ),
-  gale: wrap('<path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h16a3 3 0 1 1-3 3"/><path d="M3 16h7"/>'),
+  frost: wrap('<circle cx="12" cy="13" r="6"/><path d="M6 9h12M8 6.5a4 4 0 0 1 8 0"/><circle cx="12" cy="5" r="1"/>'),
+  blaze: wrap('<circle cx="12" cy="9" r="4"/><path d="M8 10.5c.4 1.4 1.8 2 4 2s3.6-.6 4-2"/><path d="M7 16c1 3 9 3 10 0"/><path d="M5 14h14"/>'),
+  verdant: wrap('<path d="M12 21c4 0 6-3 6-7 0-5-3-9-6-11-3 2-6 6-6 11 0 4 2 7 6 7Z"/><circle cx="12" cy="4" r="1.4"/>'),
+  tide: wrap('<path d="M9 3h6v3a3 3 0 0 1-6 0V3Z"/><path d="M8 9h8l-1 10H9L8 9Z"/><path d="M9 14h6"/>'),
+  turbo: wrap('<rect x="4" y="5" width="16" height="14" rx="2"/><rect x="7" y="8" width="10" height="5" rx="1"/><circle cx="9" cy="15" r="1"/><circle cx="13" cy="15" r="1"/>'),
+  gale: wrap('<path d="M4 8h10a3 3 0 1 0-2.5-4"/><path d="M4 12h14a3 3 0 1 1-2.5 4"/><path d="M4 16h7"/><circle cx="17" cy="6" r="2"/>'),
 };

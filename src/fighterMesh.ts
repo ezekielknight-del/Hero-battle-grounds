@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { CharacterDef } from './characters';
 
 export interface FighterVisual {
@@ -16,180 +17,144 @@ export interface FighterVisual {
   dispose(): void;
 }
 
-const plastics = new Map<number, THREE.MeshStandardMaterial>();
+const HEAD = 0xcbb56a;
 
-function plastic(color: number, emissive = 0): THREE.MeshStandardMaterial {
-  const key = color + emissive * 17;
-  let m = plastics.get(key);
+const mats = new Map<number, THREE.MeshLambertMaterial>();
+
+function mat(color: number): THREE.MeshLambertMaterial {
+  let m = mats.get(color);
   if (!m) {
-    m = new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.42,
-      metalness: 0.02,
-      emissive,
-      emissiveIntensity: emissive ? 0.7 : 0,
-    });
-    plastics.set(key, m);
+    m = new THREE.MeshLambertMaterial({ color });
+    mats.set(color, m);
   }
   return m;
 }
 
-function mesh(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.Mesh {
-  const m = new THREE.Mesh(geo, plastic(color));
+function rbox(w: number, h: number, d: number, radius: number) {
+  const r = Math.min(radius, w / 2.2, h / 2.2, d / 2.2);
+  return new RoundedBoxGeometry(w, h, d, 3, r);
+}
+
+function block(w: number, h: number, d: number, color: number, radius = 0.06, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(rbox(w, h, d, radius), mat(color));
   m.position.set(x, y, z);
   m.castShadow = true;
   m.receiveShadow = true;
   return m;
 }
 
-const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d);
-const cyl = (r: number, h: number) => new THREE.CylinderGeometry(r, r, h, 16);
+interface Outfit {
+  torso: number;
+  arm: number;
+  leg: number;
+  head?: number;
+}
 
-/** Classic blocky avatar: cylinder limbs, box torso, cube head. */
-function rig(body: THREE.Group, colors: { head: number; torso: number; arm: number; leg: number }) {
+const OUTFITS: Record<string, Outfit> = {
+  frost: { torso: 0x8fd4f2, arm: 0xe7f6ff, leg: 0x3d7eb8, head: 0xe7f3fb },
+  blaze: { torso: 0xe23b2b, arm: 0xf08a3a, leg: 0x6b241c, head: 0xe8c27a },
+  verdant: { torso: 0x2f7a28, arm: 0xd4c07a, leg: 0x1f5c34 },
+  tide: { torso: 0x1d4ed8, arm: 0x3b82f6, leg: 0x1e3a8a },
+  turbo: { torso: 0xd61f2b, arm: 0x2a2a2a, leg: 0x1a1a1a, head: 0xe6c34a },
+  gale: { torso: 0xf4f7fb, arm: 0x7dd3fc, leg: 0xd7e6f5 },
+};
+
+function classicFace(head: THREE.Group) {
+  for (const x of [-0.18, 0.18]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.072, 12, 10), mat(0x1a1a1a));
+    eye.scale.set(0.58, 1.65, 0.28);
+    eye.position.set(x, 0.1, 0.42);
+    head.add(eye);
+  }
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.03, 8, 22, Math.PI * 0.78), mat(0x1a1a1a));
+  smile.position.set(0, -0.16, 0.42);
+  smile.rotation.z = Math.PI * 1.11;
+  head.add(smile);
+}
+
+function buildAvatar(body: THREE.Group, id: string) {
+  const outfit = OUTFITS[id] ?? OUTFITS.blaze;
+  const headColor = outfit.head ?? HEAD;
+
   const legL = new THREE.Group();
   const legR = new THREE.Group();
-  legL.position.set(-0.28, 1.02, 0);
-  legR.position.set(0.28, 1.02, 0);
-  legL.add(mesh(cyl(0.2, 1.02), colors.leg, 0, -0.51, 0));
-  legR.add(mesh(cyl(0.2, 1.02), colors.leg, 0, -0.51, 0));
+  legL.position.set(-0.3, 0.96, 0);
+  legR.position.set(0.3, 0.96, 0);
+  legL.add(block(0.5, 0.96, 0.5, outfit.leg, 0.07, 0, -0.48, 0));
+  legR.add(block(0.5, 0.96, 0.5, outfit.leg, 0.07, 0, -0.48, 0));
 
-  const torso = mesh(box(1.12, 1.12, 0.58), colors.torso, 0, 1.58, 0);
+  const torso = block(1.28, 1.08, 0.58, outfit.torso, 0.07, 0, 1.5, 0);
   body.add(torso);
-  const stud = plastic(colors.torso);
-  for (const x of [-0.28, 0.28]) {
-    for (const z of [-0.12, 0.12]) {
-      const s = new THREE.Mesh(cyl(0.07, 0.05), stud);
-      s.position.set(x, 2.16, z);
-      body.add(s);
-    }
-  }
 
   const armL = new THREE.Group();
   const armR = new THREE.Group();
-  armL.position.set(-0.78, 2.08, 0);
-  armR.position.set(0.78, 2.08, 0);
-  armL.add(mesh(cyl(0.18, 1.02), colors.arm, 0, -0.51, 0));
-  armR.add(mesh(cyl(0.18, 1.02), colors.arm, 0, -0.51, 0));
+  armL.position.set(-0.92, 2.04, 0);
+  armR.position.set(0.92, 2.04, 0);
+  armL.add(block(0.5, 1.08, 0.46, outfit.arm, 0.07, 0, -0.54, 0));
+  armR.add(block(0.5, 1.08, 0.46, outfit.arm, 0.07, 0, -0.54, 0));
 
   const head = new THREE.Group();
-  head.position.set(0, 2.55, 0);
-  head.add(mesh(box(0.86, 0.86, 0.86), colors.head));
+  head.position.set(0, 2.46, 0);
+  head.add(block(0.96, 0.86, 0.82, headColor, 0.2));
+  classicFace(head);
   body.add(head);
-  return { legL, legR, armL, armR, head };
+
+  dress(id, body, head, armR);
+  return { legL, legR, armL, armR };
 }
 
-const BLACK = 0x1b1b1b;
-
-function smile(head: THREE.Group) {
-  for (const x of [-0.18, 0.18]) {
-    const eye = mesh(new THREE.SphereGeometry(0.075, 12, 8), BLACK, x, 0.08, 0.44);
-    eye.scale.set(1, 1.2, 0.35);
-    head.add(eye);
-  }
-  const mouth = mesh(new THREE.TorusGeometry(0.16, 0.028, 6, 16, Math.PI * 0.8), BLACK, 0, -0.16, 0.44);
-  mouth.rotation.z = Math.PI * 1.1;
-  head.add(mouth);
-}
-
-function decorate(id: string, body: THREE.Group, head: THREE.Group, armR: THREE.Object3D) {
+function dress(id: string, body: THREE.Group, head: THREE.Group, armR: THREE.Object3D) {
   switch (id) {
-    case 'frost': {
-      head.add(mesh(box(1.02, 0.18, 1.02), 0x2f74ff, 0, 0.5, 0));
-      head.add(mesh(box(0.74, 0.36, 0.74), 0x3b82f6, 0, 0.74, 0));
-      head.add(mesh(box(0.18, 0.18, 0.18), 0x9ad7ff, 0, 0.98, 0));
-      body.add(mesh(box(0.22, 0.1, 0.08), 0xe23b4a, -0.1, 1.85, 0.32));
-      body.add(mesh(box(0.22, 0.1, 0.08), 0xe23b4a, 0.1, 1.85, 0.32));
-      body.add(mesh(box(0.1, 0.1, 0.08), 0xb91c1c, 0, 1.85, 0.34));
-      smile(head);
+    case 'frost':
+      head.add(block(1.08, 0.16, 0.92, 0x2f74ff, 0.06, 0, 0.48, 0));
+      head.add(block(0.72, 0.28, 0.7, 0x3b82f6, 0.08, 0, 0.66, 0));
+      head.add(block(0.16, 0.16, 0.16, 0xbfefff, 0.04, 0, 0.86, 0));
+      body.add(block(0.7, 0.14, 0.08, 0xe8f7ff, 0.04, 0, 1.72, 0.3));
       break;
-    }
-    case 'blaze': {
-      const lBrow = mesh(box(0.22, 0.06, 0.06), BLACK, -0.18, 0.24, 0.44);
-      lBrow.rotation.z = 0.4;
-      const rBrow = mesh(box(0.22, 0.06, 0.06), BLACK, 0.18, 0.24, 0.44);
-      rBrow.rotation.z = -0.4;
-      head.add(lBrow, rBrow);
-      for (const x of [-0.16, 0.16]) head.add(mesh(box(0.1, 0.1, 0.06), BLACK, x, 0.06, 0.44));
-      head.add(mesh(box(0.28, 0.06, 0.06), BLACK, 0, -0.16, 0.44));
-      head.add(mesh(box(0.5, 0.28, 0.4), 0xf97316, 0, 0.64, 0));
-      head.add(mesh(box(0.28, 0.32, 0.28), 0xfacc15, 0, 0.9, 0));
+    case 'blaze':
+      head.add(block(0.34, 0.22, 0.28, 0xf97316, 0.06, 0, 0.58, 0));
+      head.add(block(0.2, 0.24, 0.18, 0xfacc15, 0.05, 0, 0.78, 0));
+      body.add(block(1.1, 0.14, 0.08, 0xfacc15, 0.04, 0, 1.15, 0.3));
       break;
-    }
-    case 'verdant': {
-      smile(head);
-      head.add(mesh(box(0.26, 0.26, 0.26), 0xef4444, 0, 0.72, 0));
-      for (const [x, z] of [[0.24, 0], [-0.24, 0], [0, 0.24], [0, -0.24]] as const) {
-        head.add(mesh(box(0.2, 0.12, 0.2), 0xf472b6, x, 0.62, z));
+    case 'verdant':
+      head.add(block(0.22, 0.22, 0.22, 0xef4444, 0.06, 0, 0.62, 0));
+      head.add(block(0.18, 0.1, 0.16, 0xf472b6, 0.04, 0.2, 0.52, 0));
+      head.add(block(0.18, 0.1, 0.16, 0xf472b6, 0.04, -0.2, 0.52, 0));
+      head.add(block(0.16, 0.1, 0.18, 0xf472b6, 0.04, 0, 0.52, 0.18));
+      body.add(block(0.16, 0.5, 0.06, 0xb7f5c8, 0.03, 0, 1.5, 0.3));
+      break;
+    case 'tide':
+      head.add(block(0.84, 0.14, 0.84, 0xf0b429, 0.05, 0, 0.48, 0));
+      head.add(block(0.62, 0.22, 0.62, 0xf0b429, 0.06, 0, 0.64, 0));
+      body.add(block(1.1, 0.16, 0.08, 0xf8fafc, 0.04, 0, 1.55, 0.3));
+      {
+        const bottle = new THREE.Group();
+        bottle.position.set(0.02, -1.2, 0.22);
+        bottle.add(block(0.16, 0.4, 0.16, 0xf08a2a, 0.05, 0, 0.2, 0));
+        bottle.add(block(0.18, 0.08, 0.18, 0xfff7e8, 0.03, 0, 0.02, 0));
+        bottle.add(block(0.08, 0.12, 0.08, 0xf0b429, 0.03, 0, 0.44, 0));
+        armR.add(bottle);
       }
       break;
-    }
-    case 'tide': {
-      const eye = mesh(new THREE.SphereGeometry(0.16, 14, 10), 0xf5d90a, 0, 0.08, 0.4);
-      eye.scale.z = 0.45;
-      head.add(eye);
-      head.add(mesh(new THREE.SphereGeometry(0.07, 10, 8), BLACK, 0, 0.08, 0.5));
-      head.add(mesh(box(0.46, 0.12, 0.12), 0xe07020, 0, -0.16, 0.4));
-      head.add(mesh(box(0.22, 0.08, 0.06), BLACK, 0, -0.28, 0.44));
-      const hat = mesh(cyl(0.4, 0.22), 0xf0b429, 0, 0.52, 0);
-      head.add(hat);
-      head.add(mesh(cyl(0.28, 0.28), 0xf0b429, 0, 0.72, 0));
-      const bottle = new THREE.Group();
-      bottle.position.set(0.05, -1.15, 0.15);
-      bottle.add(mesh(cyl(0.1, 0.42), 0xf08a2a, 0, 0.2, 0));
-      bottle.add(mesh(cyl(0.11, 0.08), 0xfff3e4, 0, 0.02, 0));
-      bottle.add(mesh(cyl(0.05, 0.12), 0xf0b429, 0, 0.46, 0));
-      armR.add(bottle);
+    case 'turbo':
+      body.add(block(0.16, 0.96, 0.08, 0xf8fafc, 0.03, 0, 1.5, 0.3));
+      body.add(block(1.05, 0.12, 0.08, 0xf8fafc, 0.03, 0, 1.85, 0.3));
+      head.add(block(0.72, 0.08, 0.06, 0x1a1a1a, 0.02, 0, 0.28, 0.4));
       break;
-    }
-    case 'turbo': {
-      const screen = plastic(0x10244d);
-      const panel = new THREE.Mesh(box(0.62, 0.36, 0.04), screen);
-      panel.position.set(0, 0.05, 0.44);
-      head.add(panel);
-      for (const x of [-0.14, 0.14]) {
-        const glow = new THREE.Mesh(box(0.16, 0.12, 0.04), plastic(0x7af0ff, 0x7af0ff));
-        glow.position.set(x, 0.06, 0.47);
-        head.add(glow);
+    case 'gale':
+      for (let i = 0; i < 3; i++) {
+        body.add(block(0.9, 0.1, 0.64, i % 2 ? 0x38bdf8 : 0xf8fafc, 0.03, 0, 1.95 - i * 0.1, 0.02));
       }
-      body.add(mesh(box(0.14, 0.14, 0.06), 0xe23b4a, -0.18, 1.35, 0.3));
-      body.add(mesh(box(0.14, 0.14, 0.06), 0xe23b4a, 0.18, 1.35, 0.3));
-      const barrel = mesh(cyl(0.1, 0.55), 0x3b82f6, 0.02, -0.85, 0.2);
-      barrel.rotation.x = Math.PI / 2.3;
-      armR.add(barrel);
-      break;
-    }
-    case 'gale': {
-      head.add(mesh(box(0.92, 0.28, 0.92), 0x1a1a2e, 0, 0.4, -0.02));
-      const bang = mesh(box(0.4, 0.55, 0.12), 0x1a1a2e, -0.22, 0.12, 0.42);
-      head.add(bang);
-      const eye = mesh(new THREE.SphereGeometry(0.075, 12, 8), BLACK, 0.18, 0.06, 0.46);
-      eye.scale.set(1, 1.2, 0.35);
-      head.add(eye);
-      const smirk = mesh(box(0.22, 0.05, 0.04), BLACK, 0.06, -0.18, 0.45);
-      smirk.rotation.z = -0.3;
-      head.add(smirk);
-      for (let i = 0; i < 4; i++) {
-        body.add(mesh(box(0.7, 0.1, 0.64), i % 2 ? 0x38bdf8 : 0xf8fafc, 0, 2.02 - i * 0.1, 0.02));
+      {
+        const tail = block(0.18, 0.7, 0.1, 0x38bdf8, 0.04, 0.48, 1.45, -0.12);
+        tail.rotation.z = 0.6;
+        body.add(tail);
       }
-      const tail = mesh(box(0.18, 0.7, 0.1), 0x38bdf8, 0.55, 1.45, -0.15);
-      tail.rotation.z = 0.7;
-      body.add(tail);
       break;
-    }
     default:
-      smile(head);
+      break;
   }
 }
-
-const COLORS: Record<string, { head: number; torso: number; arm: number; leg: number }> = {
-  frost: { head: 0xf4fbff, torso: 0x3b82f6, arm: 0xe0f2fe, leg: 0x1d4ed8 },
-  blaze: { head: 0xf6d7a8, torso: 0xef4444, arm: 0xf97316, leg: 0x7f1d1d },
-  verdant: { head: 0x86efac, torso: 0x16a34a, arm: 0x4ade80, leg: 0x166534 },
-  tide: { head: 0xf6d7c3, torso: 0x2563eb, arm: 0x60a5fa, leg: 0x1e3a8a },
-  turbo: { head: 0xf5d76e, torso: 0xf0c43a, arm: 0xeab308, leg: 0x3f3f46 },
-  gale: { head: 0xf6d7c3, torso: 0xf8fafc, arm: 0x7dd3fc, leg: 0xe2e8f0 },
-};
 
 export function buildFighterMesh(def: CharacterDef): FighterVisual {
   const root = new THREE.Group();
@@ -198,24 +163,22 @@ export function buildFighterMesh(def: CharacterDef): FighterVisual {
   const aura = new THREE.Group();
   body.add(aura);
 
-  const colors = COLORS[def.id] ?? COLORS.blaze;
-  const parts = rig(body, colors);
-  decorate(def.id, body, parts.head, parts.armR);
+  const parts = buildAvatar(body, def.id);
   body.add(parts.legL, parts.legR, parts.armL, parts.armR);
 
   const shield = new THREE.Mesh(
-    new THREE.SphereGeometry(1.6, 24, 16),
+    new THREE.SphereGeometry(1.55, 20, 14),
     new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.28, depthWrite: false }),
   );
-  shield.position.y = 1.5;
+  shield.position.y = 1.45;
   shield.visible = false;
   root.add(shield);
 
   const ice = new THREE.Mesh(
-    box(1.6, 3.1, 1.6),
-    new THREE.MeshStandardMaterial({ color: 0xbfefff, transparent: true, opacity: 0.45, roughness: 0.15 }),
+    rbox(1.7, 3.05, 1.5, 0.08),
+    new THREE.MeshLambertMaterial({ color: 0xbfefff, transparent: true, opacity: 0.45 }),
   );
-  ice.position.y = 1.55;
+  ice.position.y = 1.5;
   ice.visible = false;
   root.add(ice);
 
@@ -227,7 +190,7 @@ export function buildFighterMesh(def: CharacterDef): FighterVisual {
   tex.colorSpace = THREE.SRGBColorSpace;
   const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
   label.scale.set(2.9, 1.0, 1);
-  label.position.y = 3.75;
+  label.position.y = 4.15;
   label.renderOrder = 10;
   root.add(label);
 

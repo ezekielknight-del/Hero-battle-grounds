@@ -6,12 +6,12 @@ A 3D PVP arena brawler that runs in the browser. Six elemental fighters battle i
 
 | Fighter | Element | Style |
 | --- | --- | --- |
-| Frost | Ice | Blocky avatar in a blue cap. Chills enemies, then hits them harder |
-| Blaze | Fire | Blocky avatar with a flame tuft. Exploding fire that follows him |
-| Verdant | Green energy | Blocky green avatar with a flower. Heals by dealing damage, and can teleport |
-| Tide | Water | Blocky avatar with one eye and a bottle. Pushes, reels, and launches |
-| Turbo | Car powers | Blocky gold avatar with a screen face. Rams, mines, and bouncing shots |
-| Gale | Air | Blocky avatar in a striped scarf. A returning blade and huge gusts |
+| Frost | Ice | Classic blocky avatar in an ice-blue jacket and cap. Chills enemies, then hits them harder |
+| Blaze | Fire | Classic blocky avatar in red and orange, with a flame tuft. Exploding fire that follows him |
+| Verdant | Green energy | Classic blocky avatar in green, with a flower. Heals by dealing damage, and can teleport |
+| Tide | Water | Classic blocky avatar in blue, with a yellow cap and a bottle. Pushes, reels, and launches |
+| Turbo | Car powers | Classic blocky avatar in a red racing suit. Rams, mines, and bouncing shots |
+| Gale | Air | Classic blocky avatar in white and sky blue, with a scarf. A returning blade and huge gusts |
 
 Each fighter has 9 powers on keys `1`–`9`, and no two fighters share a power. Frost chills and then shatters chilled enemies. Blaze's shots explode and his fire follows him. Verdant heals by dealing damage and can teleport. Tide pushes, reels, and launches people. Turbo rams, lays mines, and bounces shots. Gale's blade comes back, and his wind throws everyone around. Power `9` is an ultimate with a long cooldown.
 

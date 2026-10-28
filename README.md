@@ -48,6 +48,8 @@ This starts two processes:
 - the Vite dev server for the game at http://localhost:47321
 - the WebSocket room server on port 47322 (Vite proxies `/ws` to it, so you only need to open the game URL)
 
+To use different ports, set `WEB_PORT` (game) and/or `SERVER_PORT` (room server), for example `WEB_PORT=8000 npm run dev`.
+
 To play with friends on the same network, share `http://<your-local-ip>:47321`.
 
 ### Production build

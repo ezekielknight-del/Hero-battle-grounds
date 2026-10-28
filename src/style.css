@@ -1353,9 +1353,10 @@ kbd {
   -webkit-text-fill-color: #ffd21f;
   -webkit-text-stroke: 7px var(--ink);
   text-shadow: 0 6px 0 var(--ink);
-  font-size: clamp(2.2rem, 5vw, 3rem);
-  line-height: 1.05;
+  font-size: clamp(1.85rem, 4.2vw, 2.55rem);
+  line-height: 0.95;
   letter-spacing: 0.02em;
+  max-width: 12.5ch;
 }
 
 .brand p,

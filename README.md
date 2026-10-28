@@ -1,4 +1,4 @@
-# Elemental Clash
+# Elemental Battleground
 
 A 3D PVP arena brawler that runs in the browser. Six elemental fighters battle in a huge stadium. You can play single player against bots, or online with 2, 4 or 5 players.
 

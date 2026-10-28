@@ -221,5 +221,5 @@ wss.on('connection', (ws) => {
 });
 
 http.listen(PORT, '0.0.0.0', () => {
-  console.log(`Elemental Clash server listening on http://0.0.0.0:${PORT} (WebSocket at /ws)`);
+  console.log(`Elemental Battleground server listening on http://0.0.0.0:${PORT} (WebSocket at /ws)`);
 });

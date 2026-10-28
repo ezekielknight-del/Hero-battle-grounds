@@ -180,7 +180,7 @@ function renderMenu() {
         <div class="brand">
           <span class="logo"></span>
           <div>
-            <h1>Elemental Clash</h1>
+            <h1>Elemental Battleground</h1>
             <p>Six elemental fighters. One huge arena. Every player for themselves.</p>
           </div>
         </div>
